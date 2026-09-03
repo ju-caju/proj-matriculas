@@ -25,6 +25,7 @@ class VercelEntrypointTest(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             spec.loader.exec_module(module)
 
+        self.assertEqual("handler", module.handler.__name__)
         server = HTTPServer(("127.0.0.1", 0), module.handler)
         thread = threading.Thread(target=server.handle_request, daemon=True)
         thread.start()

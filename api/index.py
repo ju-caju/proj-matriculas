@@ -44,6 +44,12 @@ class _UnavailableHandler(BaseHTTPRequestHandler):
 
 
 try:
-    handler = make_production_handler()
+    _base_handler = make_production_handler()
 except ValueError:
-    handler = _UnavailableHandler
+    _base_handler = _UnavailableHandler
+
+
+class handler(_base_handler):
+    """Entrypoint nomeado para descoberta pelo runtime Python da Vercel."""
+
+    pass
