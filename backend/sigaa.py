@@ -126,9 +126,15 @@ class Sigaa:
             and "javax.faces.ViewState" in result.inputs
         )
         if not authenticated_page:
-            raise PermissionError(
-                "Falha no login, etapa 2: o SIGAA não confirmou a autenticação."
-            )
+            if destination.scheme != "https" or destination.netloc != "sigaa.ufpb.br":
+                detail = "2A: o redirecionamento saiu do domínio do SIGAA"
+            elif "form:senha" in result.inputs:
+                detail = "2B: o SIGAA devolveu a tela de login"
+            elif path not in PORTAL_PATHS:
+                detail = "2C: o SIGAA redirecionou para uma página inesperada"
+            else:
+                detail = "2D: a página do portal veio incompleta"
+            raise PermissionError("Falha no login, etapa " + detail + ".")
         try:
             self._validate_query_page(*self.transport.request(QUERY))
         except (PermissionError, ValueError) as exc:

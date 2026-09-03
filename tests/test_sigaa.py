@@ -85,11 +85,14 @@ class SigaaTest(unittest.TestCase):
 
     def test_http_200_with_unexpected_page_does_not_confirm_login(self):
         invalid_destinations = (
-            "https://outro-host.example/sigaa/portais/discente/discente.jsf",
-            "https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf",
-            "https://sigaa.ufpb.br/sigaa/portais/discente/erro.jsf",
+            (
+                "https://outro-host.example/sigaa/portais/discente/discente.jsf",
+                "etapa 2A",
+            ),
+            ("https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf", "etapa 2C"),
+            ("https://sigaa.ufpb.br/sigaa/portais/discente/erro.jsf", "etapa 2C"),
         )
-        for destination in invalid_destinations:
+        for destination, expected_stage in invalid_destinations:
             with self.subTest(destination=destination):
                 transport = ControlledTransport(
                     [
@@ -110,8 +113,28 @@ class SigaaTest(unittest.TestCase):
                     ]
                 )
 
-                with self.assertRaisesRegex(PermissionError, "etapa 2"):
+                with self.assertRaisesRegex(PermissionError, expected_stage):
                     Sigaa(transport).login("aluno", "segredo")
+
+    def test_login_reports_when_sigaa_returns_login_form(self):
+        transport = ControlledTransport(
+            [
+                (
+                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                    page('<input name="javax.faces.ViewState" value="login-state">'),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                    page(
+                        '<input name="javax.faces.ViewState" value="result-state">'
+                        '<input name="form:senha" value="">'
+                    ),
+                ),
+            ]
+        )
+
+        with self.assertRaisesRegex(PermissionError, "etapa 2B"):
+            Sigaa(transport).login("aluno", "segredo")
 
     def test_units_rejects_external_or_unexpected_pages(self):
         unexpected_pages = (
