@@ -16,6 +16,12 @@ def make_handler(
     client_factory: Callable[[], SigaaClient],
     sessions: SessionStore,
     static_root=ROOT,
+    login_limiter=None,
+    client_ip=None,
+    secure_cookie=False,
+    cookie_path="/",
+    valid_hosts=("127.0.0.1:8765", "localhost:8765"),
+    valid_origins=(None, "http://127.0.0.1:8765", "http://localhost:8765"),
 ):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):
@@ -49,15 +55,24 @@ def make_handler(
             self.wfile.write(data)
 
         def valid_host(self):
-            return self.headers.get("Host") in (
-                "127.0.0.1:8765",
-                "localhost:8765",
-            )
+            return self.headers.get("Host") in valid_hosts
 
         def session(self):
             cookies = SimpleCookie(self.headers.get("Cookie", ""))
             session_id = cookies["session"].value if "session" in cookies else ""
             return session_id, sessions.get(session_id)
+
+        def session_cookie(self, session_id, max_age):
+            parts = [
+                "session=" + session_id,
+                "HttpOnly",
+                "SameSite=Strict",
+                "Path=" + cookie_path,
+                "Max-Age=" + str(max_age),
+            ]
+            if secure_cookie:
+                parts.append("Secure")
+            return "; ".join(parts)
 
         def do_GET(self):
             if not self.valid_host():
@@ -69,7 +84,13 @@ def make_handler(
                 "/style.css": ("style.css", "text/css"),
             }
             if self.path == "/api/session":
-                return self.reply(200, {"authenticated": bool(self.session()[1])})
+                try:
+                    authenticated = bool(self.session()[1])
+                except (ConnectionError, TimeoutError, ValueError):
+                    return self.reply(
+                        503, {"error": "Serviço temporariamente indisponível."}
+                    )
+                return self.reply(200, {"authenticated": authenticated})
             if self.path not in files:
                 return self.reply(404, {"error": "Não encontrado."})
             filename, mime = files[self.path]
@@ -80,11 +101,7 @@ def make_handler(
             )
 
         def do_POST(self):
-            if not self.valid_host() or self.headers.get("Origin") not in (
-                None,
-                "http://127.0.0.1:8765",
-                "http://localhost:8765",
-            ):
+            if not self.valid_host() or self.headers.get("Origin") not in valid_origins:
                 return self.reply(403, {"error": "Origem inválida."})
             if self.headers.get("Content-Type", "").split(";")[0] != "application/json":
                 return self.reply(415, {"error": "JSON necessário."})
@@ -102,6 +119,16 @@ def make_handler(
                         for key in ("username", "password")
                     ):
                         raise ValueError("Informe usuário e senha.")
+                    if login_limiter:
+                        address = client_ip(self) if client_ip else None
+                        if not login_limiter.allow(address):
+                            return self.reply(
+                                429,
+                                {
+                                    "error": "Muitas tentativas de login. "
+                                    "Tente novamente mais tarde."
+                                },
+                            )
                     new_client = client_factory()
                     new_client.login(data["username"], data["password"])
                     sessions.delete(session_id)
@@ -109,16 +136,14 @@ def make_handler(
                     return self.reply(
                         200,
                         {"ok": True},
-                        "session="
-                        + session_id
-                        + "; HttpOnly; SameSite=Strict; Path=/; Max-Age=1800",
+                        self.session_cookie(session_id, 1800),
                     )
                 if self.path == "/api/logout":
                     sessions.delete(session_id)
                     return self.reply(
                         200,
                         {"ok": True},
-                        "session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0",
+                        self.session_cookie("", 0),
                     )
                 if not client:
                     raise PermissionError("Entre para consultar as turmas.")
@@ -151,6 +176,8 @@ def make_handler(
                     400,
                     {"error": "Dados inválidos ou resposta inesperada do SIGAA."},
                 )
+            except (ConnectionError, TimeoutError):
+                self.reply(503, {"error": "Serviço temporariamente indisponível."})
             except Exception:
                 self.reply(
                     502,

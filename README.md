@@ -29,6 +29,20 @@ O arquivo `server.py` apenas monta o servidor local. O código do backend fica s
 
 Essa separação permite testar a API e o parser sem credenciais e sem acessar o SIGAA real.
 
+## Sessões em produção
+
+O adaptador de produção usa Redis REST para compartilhar o limite de cinco tentativas
+de login por IP em quinze minutos e para guardar somente os cookies temporários do
+SIGAA, cifrados por 30 minutos após o último uso. Ele exige
+`KV_REST_API_URL`, `KV_REST_API_TOKEN`, `SESSION_ENCRYPTION_KEY` e `VERCEL_URL`; sem qualquer uma
+dessas variáveis, o servidor seguro não inicia. Gere a chave com
+`python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
+
+O endereço do cliente em produção é aceito apenas de
+`X-Vercel-Forwarded-For`. O cookie de sessão fica restrito a `/api`, é `HttpOnly`,
+`SameSite=Strict` e recebe `Secure` no handler de produção. O servidor local continua
+usando explicitamente o adaptador em memória e não deve ser publicado.
+
 ## Testes
 
 Execute:

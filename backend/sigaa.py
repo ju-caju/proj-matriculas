@@ -1,5 +1,5 @@
 import re
-from http.cookiejar import CookieJar
+from http.cookiejar import Cookie, CookieJar
 from typing import Protocol
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
@@ -31,8 +31,9 @@ class SigaaClient(Protocol):
 class UrllibTransport:
     """Transporte HTTP com cookies isolados para uma sessão do SIGAA."""
 
-    def __init__(self):
-        self.opener = build_opener(HTTPCookieProcessor(CookieJar()))
+    def __init__(self, cookiejar=None):
+        self.cookiejar = cookiejar or CookieJar()
+        self.opener = build_opener(HTTPCookieProcessor(self.cookiejar))
 
     def request(self, path, fields=None):
         data = urlencode(fields).encode() if fields is not None else None
@@ -55,6 +56,47 @@ class Sigaa:
 
     def __init__(self, transport=None):
         self.transport = transport or UrllibTransport()
+
+    def session_data(self):
+        cookies = []
+        for cookie in self.transport.cookiejar:
+            cookies.append(
+                {
+                    "name": cookie.name,
+                    "value": cookie.value,
+                    "domain": cookie.domain,
+                    "path": cookie.path,
+                    "secure": cookie.secure,
+                    "expires": cookie.expires,
+                }
+            )
+        return {"cookies": cookies}
+
+    @classmethod
+    def from_session_data(cls, data):
+        jar = CookieJar()
+        for item in data.get("cookies", []):
+            jar.set_cookie(
+                Cookie(
+                    version=0,
+                    name=item["name"],
+                    value=item["value"],
+                    port=None,
+                    port_specified=False,
+                    domain=item["domain"],
+                    domain_specified=bool(item["domain"]),
+                    domain_initial_dot=item["domain"].startswith("."),
+                    path=item["path"],
+                    path_specified=True,
+                    secure=bool(item["secure"]),
+                    expires=item["expires"],
+                    discard=item["expires"] is None,
+                    comment=None,
+                    comment_url=None,
+                    rest={},
+                )
+            )
+        return cls(UrllibTransport(jar))
 
     def login(self, username, password):
         _, login_page = self.transport.request(LOGIN)
