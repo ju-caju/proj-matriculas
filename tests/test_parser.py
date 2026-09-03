@@ -1,7 +1,7 @@
 import unittest
 from pathlib import Path
 
-from backend.parser import Page
+from backend.parser import SigaaPage
 
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -9,7 +9,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 
 class PageParserTest(unittest.TestCase):
     def test_parses_units_and_current_view_state(self):
-        page = Page((FIXTURES / "units.html").read_text(encoding="utf-8"))
+        page = SigaaPage((FIXTURES / "units.html").read_text(encoding="utf-8"))
 
         self.assertEqual("view-units-123", page.inputs["javax.faces.ViewState"])
         self.assertEqual(
@@ -22,7 +22,7 @@ class PageParserTest(unittest.TestCase):
         )
 
     def test_parses_class_rows_without_scripts_or_personal_data(self):
-        page = Page((FIXTURES / "classes.html").read_text(encoding="utf-8"))
+        page = SigaaPage((FIXTURES / "classes.html").read_text(encoding="utf-8"))
 
         self.assertEqual(
             [

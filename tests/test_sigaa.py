@@ -1,11 +1,11 @@
 import unittest
 
-from backend.parser import Page
+from backend.parser import SigaaPage
 from backend.sigaa import LOGIN, QUERY, Sigaa
 
 
 def page(inputs="", body=""):
-    return Page(f"<html><body><form>{inputs}{body}</form></body></html>")
+    return SigaaPage(f"<html><body><form>{inputs}{body}</form></body></html>")
 
 
 class ControlledTransport:
@@ -85,8 +85,28 @@ class SigaaTest(unittest.TestCase):
                     ),
                 ),
                 (
-                    "https://sigaa.ufpb.br/sigaa/portais/discente/discente.jsf",
-                    Page("<html><body>Página temporariamente indisponível</body></html>"),
+                    "https://outro-host.example/sigaa/portais/discente/discente.jsf",
+                    page('<input name="javax.faces.ViewState" value="error-state">'),
+                ),
+            ]
+        )
+
+        with self.assertRaisesRegex(PermissionError, "Login não confirmado"):
+            Sigaa(transport).login("aluno", "segredo")
+
+    def test_http_200_at_unexpected_sigaa_route_does_not_confirm_login(self):
+        transport = ControlledTransport(
+            [
+                (
+                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                    page(
+                        '<input name="javax.faces.ViewState" value="login-state">'
+                        '<input name="form:entrar" value="Entrar">'
+                    ),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf",
+                    page('<input name="javax.faces.ViewState" value="error-state">'),
                 ),
             ]
         )

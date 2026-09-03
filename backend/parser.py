@@ -2,7 +2,7 @@ import re
 from html.parser import HTMLParser
 
 
-class Page(HTMLParser):
+class SigaaPage(HTMLParser):
     """Extrai os campos dos formulários e resultados usados pelo planejador."""
 
     def __init__(self, html):

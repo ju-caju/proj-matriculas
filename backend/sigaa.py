@@ -4,12 +4,14 @@ from typing import Protocol
 from urllib.parse import urlencode, urlsplit
 from urllib.request import HTTPCookieProcessor, Request, build_opener
 
-from .parser import Page
+from .parser import SigaaPage
 
 
 BASE = "https://sigaa.ufpb.br"
 LOGIN = "/sigaa/logon.jsf"
 QUERY = "/sigaa/ensino/turma/busca_turma.jsf"
+PORTAL_PREFIX = "/sigaa/portais/discente/"
+PORTAL_REDIRECT = "/sigaa/verportaldiscente.do"
 
 
 class SigaaTransport(Protocol):
@@ -43,7 +45,7 @@ class UrllibTransport:
             if not charset:
                 match = re.search(br'charset=["\s]*([a-zA-Z0-9-]+)', raw[:8000])
                 charset = match.group(1).decode() if match else "utf-8"
-            return response.url, Page(raw.decode(charset, errors="replace"))
+            return response.url, SigaaPage(raw.decode(charset, errors="replace"))
 
 
 class Sigaa:
@@ -70,9 +72,12 @@ class Sigaa:
             "javax.faces.ViewState": view_state,
         }
         url, result = self.transport.request(LOGIN, fields)
-        path = urlsplit(url).path.lower()
+        destination = urlsplit(url)
+        path = destination.path.lower()
         authenticated_page = (
-            "discente" in path
+            destination.scheme == "https"
+            and destination.netloc == "sigaa.ufpb.br"
+            and (path.startswith(PORTAL_PREFIX) or path == PORTAL_REDIRECT)
             and "form:senha" not in result.inputs
             and "javax.faces.ViewState" in result.inputs
         )

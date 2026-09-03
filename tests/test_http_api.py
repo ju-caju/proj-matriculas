@@ -5,7 +5,6 @@ import unittest
 from http.server import HTTPServer
 
 from backend.http import make_handler
-from backend.sessions import MemorySessionStore
 
 
 class ControlledSigaa:
@@ -36,12 +35,39 @@ class ControlledSigaa:
         }
 
 
+class ControlledSessionStore:
+    def __init__(self, clock):
+        self.clock = clock
+        self.sessions = {}
+        self.next_id = 1
+
+    def create(self, client):
+        session_id = f"controlled-{self.next_id}"
+        self.next_id += 1
+        self.sessions[session_id] = (client, self.clock())
+        return session_id
+
+    def get(self, session_id):
+        value = self.sessions.get(session_id)
+        if value is None:
+            return None
+        client, last_used = value
+        if self.clock() - last_used > 1800:
+            self.delete(session_id)
+            return None
+        self.sessions[session_id] = (client, self.clock())
+        return client
+
+    def delete(self, session_id):
+        self.sessions.pop(session_id, None)
+
+
 class ApiTest(unittest.TestCase):
     def setUp(self):
         self.now = 1000
         self.clients = []
         self.login_error = None
-        self.store = MemorySessionStore(clock=lambda: self.now)
+        self.store = ControlledSessionStore(clock=lambda: self.now)
 
         def factory():
             client = ControlledSigaa(login_error=self.login_error)
@@ -156,6 +182,28 @@ class ApiTest(unittest.TestCase):
                 "/api/login",
                 {"username": "aluno", "password": "incorreta"},
             )[:2],
+        )
+
+    def test_controlled_query_failures_keep_error_contracts(self):
+        self.login()
+        self.clients[0].units_error = PermissionError("Sua sessão expirou.")
+        self.assertEqual(
+            (401, {"error": "Sua sessão expirou."}),
+            self.request("POST", "/api/units", {})[:2],
+        )
+
+        self.clients[0].units_error = None
+        self.clients[0].query_error = ValueError("Página inesperada")
+        valid_query = {"year": "2026", "period": "2", "unit": ""}
+        self.assertEqual(
+            (400, {"error": "Dados inválidos ou resposta inesperada do SIGAA."}),
+            self.request("POST", "/api/turmas", valid_query)[:2],
+        )
+
+        self.clients[0].query_error = RuntimeError("Portal indisponível")
+        self.assertEqual(
+            (502, {"error": "Não foi possível consultar o SIGAA. Tente novamente."}),
+            self.request("POST", "/api/turmas", valid_query)[:2],
         )
 
     def test_invalid_input_and_unknown_route_keep_existing_errors(self):
