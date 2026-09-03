@@ -10,7 +10,9 @@ from cryptography.fernet import Fernet, InvalidToken
 class SessionStore(Protocol):
     def create(self, client): ...
 
-    def get(self, session_id): ...
+    def get(self, session_id, refresh=True): ...
+
+    def refresh(self, session_id): ...
 
     def delete(self, session_id): ...
 
@@ -29,14 +31,22 @@ class MemorySessionStore:
         self._sessions[session_id] = (client, self.clock())
         return session_id
 
-    def get(self, session_id):
+    def get(self, session_id, refresh=True):
         self._discard_expired()
         value = self._sessions.get(session_id)
         if value is None:
             return None
         client, _ = value
-        self._sessions[session_id] = (client, self.clock())
+        if refresh:
+            self.refresh(session_id)
         return client
+
+    def refresh(self, session_id):
+        value = self._sessions.get(session_id)
+        if value is not None:
+            self._sessions[session_id] = (value[0], self.clock())
+            return True
+        return False
 
     def delete(self, session_id):
         self._sessions.pop(session_id, None)
@@ -106,7 +116,7 @@ class EncryptedRedisSessionStore:
         self.redis.execute("SET", self._key(session_id), encrypted, "EX", self.lifetime)
         return session_id
 
-    def get(self, session_id):
+    def get(self, session_id, refresh=True):
         if not session_id:
             return None
         key = self._key(session_id)
@@ -117,9 +127,12 @@ class EncryptedRedisSessionStore:
             data = json.loads(self.cipher.decrypt(encrypted.encode()))
         except (InvalidToken, UnicodeError, json.JSONDecodeError) as exc:
             raise ValueError("Sessão inválida.") from exc
-        if not self.redis.execute("EXPIRE", key, self.lifetime):
+        if refresh and not self.refresh(session_id):
             return None
         return self.client_loader(data)
+
+    def refresh(self, session_id):
+        return bool(self.redis.execute("EXPIRE", self._key(session_id), self.lifetime))
 
     def delete(self, session_id):
         if session_id:

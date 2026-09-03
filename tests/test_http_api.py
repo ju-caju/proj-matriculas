@@ -47,8 +47,11 @@ class ControlledSessionStore:
         self.sessions[session_id] = client
         return session_id
 
-    def get(self, session_id):
+    def get(self, session_id, refresh=True):
         return self.sessions.get(session_id) if self.active else None
+
+    def refresh(self, session_id):
+        return self.active and session_id in self.sessions
 
     def delete(self, session_id):
         self.sessions.pop(session_id, None)
@@ -105,14 +108,14 @@ class ApiTest(unittest.TestCase):
 
     def test_login_session_units_query_and_logout_keep_existing_contracts(self):
         self.assertEqual(
-            (200, {"authenticated": False}),
+            (200, {"authenticated": False, "expired": False}),
             self.request("GET", "/api/session")[:2],
         )
 
         self.login()
         self.assertEqual([("aluno", "segredo")], self.clients[0].login_calls)
         self.assertEqual(
-            (200, {"authenticated": True}),
+            (200, {"authenticated": True, "expired": False}),
             self.request("GET", "/api/session")[:2],
         )
         self.assertEqual(
@@ -140,7 +143,7 @@ class ApiTest(unittest.TestCase):
 
         self.assertEqual((200, {"ok": True}), self.request("POST", "/api/logout", {})[:2])
         self.assertEqual(
-            (200, {"authenticated": False}),
+            (200, {"authenticated": False, "expired": True}),
             self.request("GET", "/api/session")[:2],
         )
 
@@ -149,7 +152,7 @@ class ApiTest(unittest.TestCase):
         self.store.active = False
 
         self.assertEqual(
-            (401, {"error": "Entre para consultar as turmas."}),
+            (401, {"error": "Sua sessão expirou. Entre novamente."}),
             self.request("POST", "/api/units", {})[:2],
         )
 

@@ -43,6 +43,10 @@ class FakeRedis:
             return count
         raise AssertionError(command)
 
+    def expire_key(self, key):
+        self.values.pop(key, None)
+        self.ttls.pop(key, None)
+
 
 class SerializableSigaa:
     def __init__(self, cookies=None):
@@ -136,6 +140,34 @@ class SecureApiTest(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             other_sessions.get("random-session-a")
+
+    def test_expired_session_is_rejected_and_invalid_use_does_not_renew_ttl(self):
+        self.login()
+        key = "session:random-session-a"
+        self.redis.ttls[key] = 12
+        self.assertEqual(404, self.request("/api/unknown")[0])
+        self.assertEqual(12, self.redis.ttls[key])
+
+        self.redis.expire_key(key)
+        status, body, _ = self.request("/api/units")
+        self.assertEqual(401, status)
+        self.assertEqual({"error": "Sua sessão expirou. Entre novamente."}, body)
+
+    def test_two_session_identifiers_retrieve_only_their_own_state(self):
+        identifiers = iter(("session-a", "session-b"))
+        self.sessions.token_factory = lambda: next(identifiers)
+        self.assertEqual(200, self.login()[0])
+        cookie_a = self.cookie
+        self.assertEqual(200, self.login(cookie=False, ip="203.0.113.11")[0])
+        cookie_b = self.cookie
+
+        self.assertNotEqual(cookie_a, cookie_b)
+        self.assertIn("session:session-a", self.redis.values)
+        self.assertIn("session:session-b", self.redis.values)
+        self.cookie = cookie_a
+        self.assertEqual(200, self.request("/api/units")[0])
+        self.cookie = cookie_b
+        self.assertEqual(200, self.request("/api/units")[0])
 
     def test_logout_deletes_session_and_expires_cookie(self):
         self.login()

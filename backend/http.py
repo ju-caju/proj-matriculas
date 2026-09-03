@@ -57,10 +57,10 @@ def make_handler(
         def valid_host(self):
             return self.headers.get("Host") in valid_hosts
 
-        def session(self):
+        def session(self, refresh=True):
             cookies = SimpleCookie(self.headers.get("Cookie", ""))
             session_id = cookies["session"].value if "session" in cookies else ""
-            return session_id, sessions.get(session_id)
+            return session_id, sessions.get(session_id, refresh=refresh)
 
         def session_cookie(self, session_id, max_age):
             parts = [
@@ -90,7 +90,13 @@ def make_handler(
                     return self.reply(
                         503, {"error": "Serviço temporariamente indisponível."}
                     )
-                return self.reply(200, {"authenticated": authenticated})
+                return self.reply(
+                    200,
+                    {
+                        "authenticated": authenticated,
+                        "expired": bool(self.headers.get("Cookie")) and not authenticated,
+                    },
+                )
             if self.path not in files:
                 return self.reply(404, {"error": "Não encontrado."})
             filename, mime = files[self.path]
@@ -112,7 +118,7 @@ def make_handler(
                 data = json.loads(self.rfile.read(size))
                 if not isinstance(data, dict):
                     raise ValueError("Dados inválidos.")
-                session_id, client = self.session()
+                session_id, client = self.session(refresh=False)
                 if self.path == "/api/login":
                     if not all(
                         isinstance(data.get(key), str) and data[key]
@@ -146,9 +152,14 @@ def make_handler(
                         self.session_cookie("", 0),
                     )
                 if not client:
+                    if session_id:
+                        raise PermissionError("Sua sessão expirou. Entre novamente.")
                     raise PermissionError("Entre para consultar as turmas.")
                 if self.path == "/api/units":
-                    return self.reply(200, {"units": client.units()})
+                    result = client.units()
+                    if not sessions.refresh(session_id):
+                        raise PermissionError("Sua sessão expirou. Entre novamente.")
+                    return self.reply(200, {"units": result})
                 if self.path == "/api/turmas":
                     year, period, unit = (
                         str(data.get(key, "")) for key in ("year", "period", "unit")
@@ -164,10 +175,10 @@ def make_handler(
                         or max(len(discipline), len(teacher)) > 60
                     ):
                         raise ValueError("Confira ano, período e unidade.")
-                    return self.reply(
-                        200,
-                        client.query(year, period, unit, discipline, teacher),
-                    )
+                    result = client.query(year, period, unit, discipline, teacher)
+                    if not sessions.refresh(session_id):
+                        raise PermissionError("Sua sessão expirou. Entre novamente.")
+                    return self.reply(200, result)
                 self.reply(404, {"error": "Não encontrado."})
             except PermissionError as exc:
                 self.reply(401, {"error": str(exc)})

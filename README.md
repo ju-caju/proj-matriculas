@@ -1,6 +1,8 @@
 # Turmas UFPB
 
-Aplicação local independente para entrar no SIGAA e consultar turmas de graduação. HTML, CSS e JavaScript, com servidor Python 3 sem dependências externas.
+Aplicação independente para entrar no SIGAA e consultar turmas de graduação. HTML,
+CSS e JavaScript, com servidor Python 3. Instale a dependência criptográfica com
+`python3 -m pip install -r requirements.txt`.
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 
