@@ -110,7 +110,7 @@ class SigaaTest(unittest.TestCase):
                     ]
                 )
 
-                with self.assertRaisesRegex(PermissionError, "Login não confirmado"):
+                with self.assertRaisesRegex(PermissionError, "etapa 2"):
                     Sigaa(transport).login("aluno", "segredo")
 
     def test_units_rejects_external_or_unexpected_pages(self):
@@ -153,7 +153,15 @@ class SigaaTest(unittest.TestCase):
             ]
         )
 
-        with self.assertRaisesRegex(PermissionError, "Login não confirmado"):
+        with self.assertRaisesRegex(PermissionError, "etapa 3"):
+            Sigaa(transport).login("aluno", "segredo")
+
+    def test_login_reports_when_initial_form_is_unavailable(self):
+        transport = ControlledTransport(
+            [("https://sigaa.ufpb.br/sigaa/logon.jsf", page())]
+        )
+
+        with self.assertRaisesRegex(PermissionError, "etapa 1"):
             Sigaa(transport).login("aluno", "segredo")
 
     def test_login_page_returned_during_query_means_expired_session(self):

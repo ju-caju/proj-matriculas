@@ -104,7 +104,7 @@ class Sigaa:
             view_state = login_page.inputs["javax.faces.ViewState"]
         except KeyError as exc:
             raise PermissionError(
-                "Login não confirmado. Confira usuário e senha no SIGAA."
+                "Falha no login, etapa 1: o SIGAA não apresentou o formulário esperado."
             ) from exc
         fields = {
             "form": "form",
@@ -127,13 +127,14 @@ class Sigaa:
         )
         if not authenticated_page:
             raise PermissionError(
-                "Login não confirmado. Confira usuário e senha no SIGAA."
+                "Falha no login, etapa 2: o SIGAA não confirmou a autenticação."
             )
         try:
             self._validate_query_page(*self.transport.request(QUERY))
         except (PermissionError, ValueError) as exc:
             raise PermissionError(
-                "Login não confirmado. Confira usuário e senha no SIGAA."
+                "Falha no login, etapa 3: a autenticação ocorreu, mas o SIGAA "
+                "não abriu a consulta de turmas."
             ) from exc
 
     def units(self):
