@@ -26,9 +26,19 @@ def make_production_handler(environment=None):
         environment.get("SESSION_ENCRYPTION_KEY"),
         Sigaa.from_session_data,
     )
-    host = environment.get("VERCEL_URL")
-    if not host:
+    deployment_host = environment.get("VERCEL_URL")
+    if not deployment_host:
         raise ValueError("Domínio da Vercel ausente.")
+    hosts = tuple(
+        dict.fromkeys(
+            host
+            for host in (
+                deployment_host,
+                environment.get("VERCEL_PROJECT_PRODUCTION_URL"),
+            )
+            if host
+        )
+    )
     return make_handler(
         Sigaa,
         sessions,
@@ -36,6 +46,6 @@ def make_production_handler(environment=None):
         client_ip=vercel_client_ip,
         secure_cookie=True,
         cookie_path="/api",
-        valid_hosts=(host,),
-        valid_origins=(None, "https://" + host),
+        valid_hosts=hosts,
+        valid_origins=(None, *("https://" + host for host in hosts)),
     )

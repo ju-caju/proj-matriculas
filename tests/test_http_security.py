@@ -3,6 +3,7 @@ import json
 import threading
 import unittest
 from http.server import HTTPServer
+from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 
@@ -223,6 +224,43 @@ class SecureApiTest(unittest.TestCase):
             make_production_handler(
                 {"KV_REST_API_URL": "https://redis.example", "KV_REST_API_TOKEN": "token"}
             )
+
+    def test_production_accepts_stable_project_domain(self):
+        handler = make_production_handler(
+            {
+                "KV_REST_API_URL": "https://redis.invalid",
+                "KV_REST_API_TOKEN": "token",
+                "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+                "VERCEL_URL": "proj-matriculas-random.vercel.app",
+                "VERCEL_PROJECT_PRODUCTION_URL": "proj-matriculas.vercel.app",
+            }
+        )
+        server = HTTPServer(("127.0.0.1", 0), handler)
+        thread = threading.Thread(target=server.handle_request, daemon=True)
+        thread.start()
+        with patch(
+            "backend.sessions.RedisRestClient.execute",
+            side_effect=ConnectionError("redis unavailable"),
+        ):
+            connection = http.client.HTTPConnection(*server.server_address)
+            connection.request(
+                "POST",
+                "/api/login",
+                json.dumps({"username": "student", "password": "password"}),
+                headers={
+                    "Host": "proj-matriculas.vercel.app",
+                    "Origin": "https://proj-matriculas.vercel.app",
+                    "Content-Type": "application/json",
+                    "X-Vercel-Forwarded-For": "203.0.113.10",
+                },
+            )
+            response = connection.getresponse()
+            response.read()
+            connection.close()
+            thread.join()
+        server.server_close()
+
+        self.assertEqual(503, response.status)
 
 
 if __name__ == "__main__":
