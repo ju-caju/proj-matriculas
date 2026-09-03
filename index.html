@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minha grade · UFPB</title><link rel="stylesheet" href="/style.css"><script src="/schedule.js" defer></script><script src="/app.js" defer></script></head>
+<body>
+<header><strong>Minha grade · UFPB</strong><button id="logout" class="secondary" hidden>Sair</button></header>
+<main>
+<section id="login-panel">
+<h1>Planeje seu semestre</h1><p>Entre com sua conta do SIGAA para escolher turmas e montar sua semana.</p>
+<form id="login-form">
+<label>Usuário<input name="username" autocomplete="username" required></label>
+<label>Senha<input name="password" type="password" autocomplete="current-password" required></label>
+<button type="submit">Entrar</button>
+</form>
+<p class="note">Aplicação local e independente da UFPB. A senha é usada apenas para entrar e não é salva pela aplicação.</p>
+</section>
+<section id="query-panel" hidden>
+<h1>Monte sua grade</h1><p>Arraste para a grade para adicionar e para fora dela para remover. Os horários são preenchidos automaticamente.</p>
+<form id="query-form">
+<label class="search-name">Disciplina<input name="discipline" maxlength="60" placeholder="Nome ou parte do nome"></label>
+<label class="search-name">Professor(a)<input name="teacher" maxlength="60" placeholder="Nome ou parte do nome"></label>
+<label>Ano<input name="year" type="number" min="2000" max="2099" value="2026" required></label>
+<label>Período<select name="period"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+<label class="unit">Departamento (opcional)<select name="unit"><option value="">Todos os departamentos</option></select></label>
+<button type="submit">Consultar</button>
+</form>
+<p class="search-help">Busque pela disciplina, pelo professor ou pelos dois juntos. Deixe “Todos os departamentos” para pesquisar em toda a UFPB.</p>
+<div class="planner">
+<aside class="catalog" aria-label="Turmas disponíveis"><div class="remove-hint">Solte aqui ou fora da grade para remover a turma</div><h2 id="count">Turmas disponíveis</h2><label>Buscar turma<input id="filter" type="search" placeholder="Disciplina, docente ou horário"></label><p id="empty">Faça uma consulta para ver as turmas.</p><div id="courses" class="course-list"></div></aside>
+<section class="week-panel" aria-label="Planejamento semanal">
+<div class="week-heading"><div><h2 id="plan-title">Minha semana · 2026.2</h2><p id="plan-count">Nenhuma turma selecionada</p></div><div class="week-actions"><button id="export-plan" disabled>Baixar imagem</button><button id="clear-plan" class="secondary" disabled>Limpar grade</button></div></div>
+<div id="conflict-status" class="conflict-status" role="status" aria-live="polite">Adicione uma turma para começar.</div>
+<div id="calendar-drop" class="calendar-drop" aria-label="Solte uma turma para adicioná-la aos horários oficiais"><div id="drop-hint">Solte aqui para adicionar nos dias e horários da turma</div><div class="calendar-scroll"><div id="calendar" class="calendar"></div></div></div>
+<p class="calendar-note">Planejamento local, sem efetuar matrícula. <a href="https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/" target="_blank" rel="noopener">Horários da UFPB</a> · N1 começa às 19h.</p>
+<details id="conflict-details" hidden><summary id="conflict-summary">Ver choques</summary><ul id="conflict-list"></ul></details>
+<details id="selected-details"><summary id="selected-summary">Turmas na grade (0)</summary><div id="selected-list"></div></details>
+<p id="save-note" class="calendar-note">Sua grade fica salva neste navegador, separada por semestre.</p>
+</section></div>
+</section>
+<p id="status" role="status" aria-live="polite"></p>
+</main>
+</body></html>

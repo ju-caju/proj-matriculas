@@ -1,0 +1,21 @@
+# Turmas UFPB
+
+Aplicação local independente para entrar no SIGAA e consultar turmas de graduação. HTML, CSS e JavaScript, com servidor Python 3 sem dependências externas.
+
+Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
+
+O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor escuta apenas no computador local. Não foi preparado para hospedagem pública.
+
+Filtros iniciais: graduação, 2026.2, unidade 2151, com os demais campos da consulta capturada. A lista de unidades vem do SIGAA. Busca por texto filtra os resultados já carregados. O retorno HTML do SIGAA é convertido em dados; scripts e links de ação do portal não são executados.
+
+Depende da estrutura atual dos formulários e da tabela do SIGAA; alterações no portal podem exigir ajustes no parser. Nenhum arquivo HAR ou credencial é necessário para executar a aplicação.
+
+## Planejador semanal
+
+Arraste uma turma para a semana ou use Adicionar. Os blocos são posicionados automaticamente; para remover, use o botão na lista ou clique no bloco para abrir seus detalhes. Choques ficam em vermelho e a lista abaixo da grade informa as turmas e os horários envolvidos. O planejamento não efetua matrícula.
+
+A grade é salva no armazenamento local deste navegador, por semestre (compartilhada entre contas que usam o mesmo navegador). Alterar unidade mantém as seleções. Limpar grade remove o planejamento do semestre atual.
+
+A conversão usa a tabela publicada pela ACI/UFPB em https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/ e suporta múltiplos dias, turnos, horários descontínuos e intervalos de datas. N1 corresponde a 19:00–19:50; T6 a 17:30–18:20. Códigos desconhecidos não são posicionados silenciosamente. A grade representa a semana recorrente; intervalos de datas aparecem nos detalhes e são considerados na detecção de choques.
+
+Teste da lógica: `node schedule.test.js`.

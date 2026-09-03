@@ -1,0 +1,10 @@
+const assert=require('node:assert/strict');const S=require('./schedule.js');
+assert.deepEqual(S.parse('24M23').meetings.map(m=>[m.day,m.start,m.end]),[[2,480,580],[4,480,580]]);
+assert.equal(S.parse('3T6 6N234').meetings.length,2);
+assert.equal(S.describe('45N23'),'Quarta e Quinta · 19:50–21:30');
+assert(S.parse('2N5').errors.length);assert(S.parse('24M23 INVALIDO').errors.length);
+assert.equal(S.conflicts([{horario:'24M23'},{horario:'4M34'}]).length,1);
+assert.equal(S.conflicts([{horario:'24M23'},{horario:'24M45'}]).length,0);
+assert.equal(S.conflicts([{horario:'2M23 (01/08/2026 - 10/08/2026)'},{horario:'2M23 (11/08/2026 - 30/08/2026)'}]).length,0);
+assert.equal(S.layout([{start:480,end:580},{start:530,end:640}])[1].lane,1);
+console.log('Conversao, multiplos turnos, choques, datas e layout: OK');
