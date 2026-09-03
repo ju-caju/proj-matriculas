@@ -10,10 +10,22 @@ from unittest.mock import patch
 
 
 ENTRYPOINT = Path(__file__).parent.parent / "api" / "index.py"
+API_ROOT = ENTRYPOINT.parent
 VERCEL_CONFIG = Path(__file__).parent.parent / "vercel.json"
 
 
 class VercelEntrypointTest(unittest.TestCase):
+    def test_each_api_route_defines_its_own_named_handler(self):
+        for path in API_ROOT.glob("*.py"):
+            module_name = "vercel_" + path.stem
+            spec = importlib.util.spec_from_file_location(module_name, path)
+            module = importlib.util.module_from_spec(spec)
+            with patch.dict(os.environ, {}, clear=True):
+                spec.loader.exec_module(module)
+
+            self.assertEqual("handler", module.handler.__name__, path.name)
+            self.assertEqual(module_name, module.handler.__module__, path.name)
+
     def test_function_pattern_matches_python_entrypoints_in_api_root(self):
         config = json.loads(VERCEL_CONFIG.read_text())
 
