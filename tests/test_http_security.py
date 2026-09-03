@@ -53,7 +53,7 @@ class SerializableSigaa:
         self.cookies = cookies or []
 
     def login(self, username, password):
-        self.cookies = [{"name": "JSESSIONID", "value": "temporary-secret"}]
+        self.cookies = [{"name": "JSESSIONID", "value": username + "-temporary-secret"}]
 
     def session_data(self):
         return {"cookies": self.cookies}
@@ -63,7 +63,7 @@ class SerializableSigaa:
         return cls(data["cookies"])
 
     def units(self):
-        return [{"value": "2151", "label": "CI"}]
+        return [{"value": "2151", "label": self.cookies[0]["value"]}]
 
 
 class SecureApiTest(unittest.TestCase):
@@ -113,9 +113,9 @@ class SecureApiTest(unittest.TestCase):
         connection.close()
         return result
 
-    def login(self, **kwargs):
+    def login(self, username="student", **kwargs):
         return self.request(
-            "/api/login", {"username": "student", "password": "password"}, **kwargs
+            "/api/login", {"username": username, "password": "password"}, **kwargs
         )
 
     def test_session_is_encrypted_isolated_renewed_and_contains_no_password(self):
@@ -127,7 +127,7 @@ class SecureApiTest(unittest.TestCase):
         self.assertIn("Path=/api", cookie)
 
         stored = self.redis.values["session:random-session-a"]
-        self.assertNotIn("temporary-secret", stored)
+        self.assertNotIn("student-temporary-secret", stored)
         self.assertNotIn("password", stored)
         self.redis.ttls["session:random-session-a"] = 1
         self.assertEqual(200, self.request("/api/units")[0])
@@ -156,18 +156,26 @@ class SecureApiTest(unittest.TestCase):
     def test_two_session_identifiers_retrieve_only_their_own_state(self):
         identifiers = iter(("session-a", "session-b"))
         self.sessions.token_factory = lambda: next(identifiers)
-        self.assertEqual(200, self.login()[0])
+        self.assertEqual(200, self.login(username="alice")[0])
         cookie_a = self.cookie
-        self.assertEqual(200, self.login(cookie=False, ip="203.0.113.11")[0])
+        self.assertEqual(
+            200, self.login(username="bob", cookie=False, ip="203.0.113.11")[0]
+        )
         cookie_b = self.cookie
 
         self.assertNotEqual(cookie_a, cookie_b)
         self.assertIn("session:session-a", self.redis.values)
         self.assertIn("session:session-b", self.redis.values)
         self.cookie = cookie_a
-        self.assertEqual(200, self.request("/api/units")[0])
+        self.assertEqual(
+            "alice-temporary-secret",
+            self.request("/api/units")[1]["units"][0]["label"],
+        )
         self.cookie = cookie_b
-        self.assertEqual(200, self.request("/api/units")[0])
+        self.assertEqual(
+            "bob-temporary-secret",
+            self.request("/api/units")[1]["units"][0]["label"],
+        )
 
     def test_logout_deletes_session_and_expires_cookie(self):
         self.login()

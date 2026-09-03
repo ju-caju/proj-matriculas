@@ -82,7 +82,7 @@ $('#clear-plan').addEventListener('click',()=>{selected=[];save();render();statu
 $('#login-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#login-form button');button.disabled=true;status('Entrando no SIGAA…');try{await api('/api/login',Object.fromEntries(new FormData(event.target)));$('[name="password"]').value='';authenticated(true);await loadUnits();}catch(error){status(error.message,true);}finally{$('[name="password"]').value='';button.disabled=false;}});
 $('#query-form').addEventListener('submit',event=>{event.preventDefault();consult();});$('#filter').addEventListener('input',renderCatalog);
 $('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{});authenticated(false);status('Você saiu. Sua grade permanece salva neste navegador.');}catch(error){status(error.message,true);}});
-api('/api/session').then(async result=>{authenticated(result.authenticated);if(result.authenticated)await loadUnits();}).catch(error=>status(error.message,true));
+api('/api/session').then(async result=>{authenticated(result.authenticated);if(result.authenticated)await loadUnits();else if(result.expired)status('Sua sessão expirou. Entre novamente.',true);}).catch(error=>status(error.message,true));
 
 async function loadUnits(){try{const result=await api('/api/units',{});const select=$('[name=unit]');select.replaceChildren(new Option('Todos os departamentos',''),...result.units.filter(u=>u.value&&u.value!=='0').map(u=>new Option(u.label,u.value)));$('#empty').textContent='Busque por disciplina ou professor para encontrar turmas.';status('Informe os nomes acima e clique em Consultar.');}catch(error){status(error.message,true);}}
 
