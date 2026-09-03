@@ -18,4 +18,24 @@ A grade é salva no armazenamento local deste navegador, por semestre (compartil
 
 A conversão usa a tabela publicada pela ACI/UFPB em https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/ e suporta múltiplos dias, turnos, horários descontínuos e intervalos de datas. N1 corresponde a 19:00–19:50; T6 a 17:30–18:20. Códigos desconhecidos não são posicionados silenciosamente. A grade representa a semana recorrente; intervalos de datas aparecem nos detalhes e são considerados na detecção de choques.
 
-Teste da lógica: `node schedule.test.js`.
+## Organização do backend
+
+O arquivo `server.py` apenas monta o servidor local. O código do backend fica separado em:
+
+- `backend/http.py`: endpoints, validação das requisições e arquivos estáticos;
+- `backend/sessions.py`: contrato de armazenamento e implementação local em memória;
+- `backend/sigaa.py`: protocolo de login e consulta, com transporte HTTP substituível;
+- `backend/parser.py`: leitura dos formulários, unidades e turmas retornados pelo SIGAA.
+
+Essa separação permite testar a API e o parser sem credenciais e sem acessar o SIGAA real.
+
+## Testes
+
+Execute:
+
+```sh
+python3 -m unittest discover -v
+node schedule.test.js
+```
+
+Os testes Python usam páginas HTML sanitizadas e implementações controladas da integração e do armazenamento.
