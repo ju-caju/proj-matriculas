@@ -55,3 +55,44 @@ node schedule.test.js
 ```
 
 Os testes Python usam páginas HTML sanitizadas e implementações controladas da integração e do armazenamento.
+
+## Prévia na Vercel
+
+O projeto usa os arquivos estáticos da raiz sem framework de frontend. Cada arquivo
+em `api/` publica um endpoint Python na mesma origem. O `vercel.json` aplica CSP,
+`X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` também aos arquivos
+estáticos.
+
+1. Importe o repositório na Vercel em um projeto no plano Hobby.
+2. Conecte um banco Upstash Redis no plano gratuito. A integração deve criar
+   `KV_REST_API_URL` e `KV_REST_API_TOKEN` nos ambientes de prévia.
+3. Gere uma chave Fernet e cadastre o resultado como variável sensível
+   `SESSION_ENCRYPTION_KEY` somente na Vercel:
+
+   ```sh
+   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+   ```
+
+4. Confirme que `VERCEL_URL`, variável de sistema da Vercel, está disponível para
+   as funções. Crie uma implantação de prévia sem promover para produção.
+5. Não habilite recarga automática, plano pago nem cobrança por excedentes para
+   cumprir o limite deste ticket.
+
+Antes de cadastrar os segredos, a API deve responder 503 sem citar a configuração
+ausente:
+
+```sh
+python3 scripts/check_preview.py --sem-configuracao https://URL-DA-PREVIA
+```
+
+Depois de conectar o Redis, cadastrar a chave e gerar outra prévia, execute:
+
+```sh
+python3 scripts/check_preview.py https://URL-DA-PREVIA
+```
+
+O verificador carrega a interface, consulta o estado sem sessão, testa os headers,
+os corpos JSON, a origem e o limite de login. Ele usa somente corpos inválidos e
+nunca envia usuário ou senha ao SIGAA. A execução consome as seis tentativas do IP
+do verificador; aguarde quinze minutos antes de tentar um login manual pelo mesmo
+IP.

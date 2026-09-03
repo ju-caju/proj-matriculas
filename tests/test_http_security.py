@@ -194,6 +194,20 @@ class SecureApiTest(unittest.TestCase):
         self.assertEqual(900, self.redis.ttls["login:203.0.113.10"])
         self.assertEqual(200, self.login(ip="203.0.113.11", cookie=False)[0])
 
+    def test_rate_limit_can_be_verified_without_contacting_sigaa(self):
+        for _ in range(5):
+            status, _, _ = self.request("/api/login", {"probe": True}, cookie=False)
+            self.assertEqual(400, status)
+
+        status, body, _ = self.request("/api/login", {"probe": True}, cookie=False)
+
+        self.assertEqual(429, status)
+        self.assertEqual(
+            {"error": "Muitas tentativas de login. Tente novamente mais tarde."},
+            body,
+        )
+        self.assertFalse(any(key.startswith("session:") for key in self.redis.values))
+
     def test_missing_trusted_ip_and_redis_failure_fail_closed(self):
         self.assertEqual(503, self.login(ip=None)[0])
         self.assertEqual(200, self.login()[0])

@@ -10,6 +10,15 @@ from .sigaa import SigaaClient
 
 
 ROOT = Path(__file__).parent.parent
+SECURITY_HEADERS = (
+    ("X-Content-Type-Options", "nosniff"),
+    ("X-Frame-Options", "DENY"),
+    (
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self'; "
+        "frame-ancestors 'none'; form-action 'self'",
+    ),
+)
 
 
 def make_handler(
@@ -43,12 +52,8 @@ def make_handler(
             self.send_header("Content-Type", mime)
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Cache-Control", "no-store")
-            self.send_header("X-Content-Type-Options", "nosniff")
-            self.send_header(
-                "Content-Security-Policy",
-                "default-src 'self'; script-src 'self'; style-src 'self'; "
-                "frame-ancestors 'none'; form-action 'self'",
-            )
+            for key, value in SECURITY_HEADERS:
+                self.send_header(key, value)
             if cookie:
                 self.send_header("Set-Cookie", cookie)
             self.end_headers()
@@ -120,11 +125,6 @@ def make_handler(
                     raise ValueError("Dados inválidos.")
                 session_id, client = self.session(refresh=False)
                 if self.path == "/api/login":
-                    if not all(
-                        isinstance(data.get(key), str) and data[key]
-                        for key in ("username", "password")
-                    ):
-                        raise ValueError("Informe usuário e senha.")
                     if login_limiter:
                         address = client_ip(self) if client_ip else None
                         if not login_limiter.allow(address):
@@ -135,6 +135,11 @@ def make_handler(
                                     "Tente novamente mais tarde."
                                 },
                             )
+                    if not all(
+                        isinstance(data.get(key), str) and data[key]
+                        for key in ("username", "password")
+                    ):
+                        raise ValueError("Informe usuário e senha.")
                     new_client = client_factory()
                     new_client.login(data["username"], data["password"])
                     sessions.delete(session_id)

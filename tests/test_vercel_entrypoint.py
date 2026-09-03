@@ -1,0 +1,42 @@
+import http.client
+import importlib.util
+import os
+import threading
+import unittest
+from http.server import HTTPServer
+from pathlib import Path
+from unittest.mock import patch
+
+
+ENTRYPOINT = Path(__file__).parent.parent / "api" / "index.py"
+
+
+class VercelEntrypointTest(unittest.TestCase):
+    def test_missing_configuration_fails_closed_with_generic_response(self):
+        spec = importlib.util.spec_from_file_location("vercel_entrypoint", ENTRYPOINT)
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(os.environ, {}, clear=True):
+            spec.loader.exec_module(module)
+
+        server = HTTPServer(("127.0.0.1", 0), module.handler)
+        thread = threading.Thread(target=server.handle_request, daemon=True)
+        thread.start()
+        connection = http.client.HTTPConnection(*server.server_address)
+        connection.request("GET", "/api/session")
+        response = connection.getresponse()
+        body = response.read()
+        connection.close()
+        thread.join()
+        server.server_close()
+
+        self.assertEqual(503, response.status)
+        self.assertEqual(
+            '{"error":"Serviço temporariamente indisponível."}'.encode(), body
+        )
+        self.assertEqual("nosniff", response.getheader("X-Content-Type-Options"))
+        self.assertEqual("DENY", response.getheader("X-Frame-Options"))
+        self.assertIn("frame-ancestors 'none'", response.getheader("Content-Security-Policy"))
+
+
+if __name__ == "__main__":
+    unittest.main()
