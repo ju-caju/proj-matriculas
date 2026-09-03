@@ -6,7 +6,7 @@ CSS e JavaScript, com servidor Python 3. Instale a dependência criptográfica c
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 
-O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor escuta apenas no computador local. Não foi preparado para hospedagem pública.
+O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor local escuta apenas no computador. A versão pública usa o adaptador de produção descrito abaixo.
 
 Filtros iniciais: graduação, 2026.2, unidade 2151, com os demais campos da consulta capturada. A lista de unidades vem do SIGAA. Busca por texto filtra os resultados já carregados. O retorno HTML do SIGAA é convertido em dados; scripts e links de ação do portal não são executados.
 
@@ -96,3 +96,40 @@ os corpos JSON, a origem e o limite de login. Ele usa somente corpos inválidos 
 nunca envia usuário ou senha ao SIGAA. A execução consome as seis tentativas do IP
 do verificador; aguarde quinze minutos antes de tentar um login manual pelo mesmo
 IP.
+
+## Produção
+
+A produção está em https://proj-matriculas.vercel.app. O projeto Vercel usa o plano
+Hobby, o preset `Other` e a raiz do repositório. A branch `main` do repositório
+privado `ju-caju/proj-matriculas` dispara os deploys de produção.
+
+Para reproduzir a configuração:
+
+1. Importe o repositório na Vercel com o preset `Other`.
+2. Crie um banco Upstash Redis no plano Free e conecte-o a Production e Preview.
+   Use o prefixo `KV_REST_API` e marque as variáveis como secretas. Confirme a
+   criação de `KV_REST_API_URL` e `KV_REST_API_TOKEN`.
+3. Gere uma chave Fernet e salve-a como segredo `SESSION_ENCRYPTION_KEY`. Nunca
+   grave o valor em arquivo local ou no Git.
+4. Habilite as variáveis de sistema da Vercel. O backend valida `VERCEL_URL` para
+   aceitar apenas o host e a origem do próprio deploy.
+5. Faça um novo deploy da `main`. Não habilite recursos pagos, recarga automática,
+   Analytics ou Speed Insights para esta aplicação.
+
+Depois do deploy, rode `scripts/check_preview.py` apenas quando não houver login
+manual previsto para os próximos quinze minutos. O script consome todas as
+tentativas permitidas do IP. Para uma verificação sem consumir o limite, abra a
+interface e consulte somente `/api/session`.
+
+Use a tela de Logs da Vercel para diagnóstico. Os logs esperados contêm rota,
+status, classe do resultado e duração. Eles não devem conter usuário, senha,
+cookies, filtros de busca, HTML do SIGAA nem dados acadêmicos. Se aparecer algum
+desses dados, interrompa o uso e remova o log antes de continuar.
+
+Uma sessão expira após 30 minutos sem uso. Um novo login cria outra sessão; logout
+apaga a sessão no Redis. Mudanças nos formulários JSF, nomes de campos ou tabela de
+turmas do SIGAA podem quebrar o parser. Nesse caso, atualize as fixtures sanitizadas
+e o parser sem copiar HAR, cookies ou páginas pessoais para o repositório.
+
+O planejamento e a exportação PNG continuam no navegador. O servidor recebe apenas
+as consultas necessárias ao SIGAA e não recebe a grade montada pelo usuário.
