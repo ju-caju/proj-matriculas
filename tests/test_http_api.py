@@ -36,27 +36,19 @@ class ControlledSigaa:
 
 
 class ControlledSessionStore:
-    def __init__(self, clock):
-        self.clock = clock
+    def __init__(self):
         self.sessions = {}
         self.next_id = 1
+        self.active = True
 
     def create(self, client):
         session_id = f"controlled-{self.next_id}"
         self.next_id += 1
-        self.sessions[session_id] = (client, self.clock())
+        self.sessions[session_id] = client
         return session_id
 
     def get(self, session_id):
-        value = self.sessions.get(session_id)
-        if value is None:
-            return None
-        client, last_used = value
-        if self.clock() - last_used > 1800:
-            self.delete(session_id)
-            return None
-        self.sessions[session_id] = (client, self.clock())
-        return client
+        return self.sessions.get(session_id) if self.active else None
 
     def delete(self, session_id):
         self.sessions.pop(session_id, None)
@@ -67,7 +59,7 @@ class ApiTest(unittest.TestCase):
         self.now = 1000
         self.clients = []
         self.login_error = None
-        self.store = ControlledSessionStore(clock=lambda: self.now)
+        self.store = ControlledSessionStore()
 
         def factory():
             client = ControlledSigaa(login_error=self.login_error)
@@ -154,23 +146,12 @@ class ApiTest(unittest.TestCase):
 
     def test_expired_session_returns_existing_unauthorized_response(self):
         self.login()
-        self.now += 1801
+        self.store.active = False
 
         self.assertEqual(
             (401, {"error": "Entre para consultar as turmas."}),
             self.request("POST", "/api/units", {})[:2],
         )
-
-    def test_using_session_renews_its_inactivity_period(self):
-        self.login()
-        self.now += 1000
-        self.assertEqual(
-            (200, {"authenticated": True}),
-            self.request("GET", "/api/session")[:2],
-        )
-        self.now += 1000
-
-        self.assertEqual(200, self.request("POST", "/api/units", {})[0])
 
     def test_controlled_login_failure_is_returned_as_unauthorized(self):
         self.login_error = PermissionError("Login não confirmado.")

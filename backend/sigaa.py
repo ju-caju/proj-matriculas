@@ -10,8 +10,10 @@ from .parser import SigaaPage
 BASE = "https://sigaa.ufpb.br"
 LOGIN = "/sigaa/logon.jsf"
 QUERY = "/sigaa/ensino/turma/busca_turma.jsf"
-PORTAL_PREFIX = "/sigaa/portais/discente/"
-PORTAL_REDIRECT = "/sigaa/verportaldiscente.do"
+PORTAL_PATHS = {
+    "/sigaa/portais/discente/discente.jsf",
+    "/sigaa/verportaldiscente.do",
+}
 
 
 class SigaaTransport(Protocol):
@@ -77,7 +79,7 @@ class Sigaa:
         authenticated_page = (
             destination.scheme == "https"
             and destination.netloc == "sigaa.ufpb.br"
-            and (path.startswith(PORTAL_PREFIX) or path == PORTAL_REDIRECT)
+            and path in PORTAL_PATHS
             and "form:senha" not in result.inputs
             and "javax.faces.ViewState" in result.inputs
         )
@@ -85,6 +87,12 @@ class Sigaa:
             raise PermissionError(
                 "Login não confirmado. Confira usuário e senha no SIGAA."
             )
+        try:
+            self._validate_query_page(*self.transport.request(QUERY))
+        except (PermissionError, ValueError) as exc:
+            raise PermissionError(
+                "Login não confirmado. Confira usuário e senha no SIGAA."
+            ) from exc
 
     def units(self):
         url, page = self.transport.request(QUERY)
@@ -139,5 +147,13 @@ class Sigaa:
     def _validate_query_page(url, page):
         if "form:senha" in page.inputs:
             raise PermissionError("Sua sessão expirou. Entre novamente.")
-        if urlsplit(url).path != QUERY or "javax.faces.ViewState" not in page.inputs:
+        destination = urlsplit(url)
+        expected_page = (
+            destination.scheme == "https"
+            and destination.netloc == "sigaa.ufpb.br"
+            and destination.path == QUERY
+            and "javax.faces.ViewState" in page.inputs
+            and "form:buttonBuscar" in page.inputs
+        )
+        if not expected_page:
             raise ValueError("O SIGAA retornou uma página inesperada. Tente novamente.")

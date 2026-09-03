@@ -36,7 +36,15 @@ class SigaaTest(unittest.TestCase):
                 (
                     "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
                     page(
-                        '<input name="javax.faces.ViewState" value="units-state">',
+                        '<input name="javax.faces.ViewState" value="confirmation-state">'
+                        '<input name="form:buttonBuscar" value="Buscar">'
+                    ),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
+                    page(
+                        '<input name="javax.faces.ViewState" value="units-state">'
+                        '<input name="form:buttonBuscar" value="Buscar">',
                         '<select name="form:selectUnidade">'
                         '<option value="2151">CENTRO DE INFORMÁTICA</option></select>',
                     ),
@@ -44,7 +52,8 @@ class SigaaTest(unittest.TestCase):
                 (
                     "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
                     page(
-                        '<input name="javax.faces.ViewState" value="query-state">',
+                        '<input name="javax.faces.ViewState" value="query-state">'
+                        '<input name="form:buttonBuscar" value="Buscar">',
                         '<select name="form:selectUnidade">'
                         '<option value="2151">CENTRO DE INFORMÁTICA</option></select>',
                     ),
@@ -67,34 +76,63 @@ class SigaaTest(unittest.TestCase):
         self.assertEqual("login-state", transport.calls[1][1]["javax.faces.ViewState"])
         self.assertEqual(LOGIN, transport.calls[1][0])
         self.assertEqual([{"value": "2151", "label": "CENTRO DE INFORMÁTICA"}], units)
-        self.assertEqual(QUERY, transport.calls[3][0])
-        self.assertIsNone(transport.calls[3][1])
-        self.assertEqual("query-state", transport.calls[4][1]["javax.faces.ViewState"])
-        self.assertEqual("cálculo", transport.calls[4][1]["form:inputNomeDisciplina"])
-        self.assertEqual("docente", transport.calls[4][1]["form:inputNomeDocente"])
+        self.assertEqual(QUERY, transport.calls[4][0])
+        self.assertIsNone(transport.calls[4][1])
+        self.assertEqual("query-state", transport.calls[5][1]["javax.faces.ViewState"])
+        self.assertEqual("cálculo", transport.calls[5][1]["form:inputNomeDisciplina"])
+        self.assertEqual("docente", transport.calls[5][1]["form:inputNomeDocente"])
         self.assertEqual([], result["rows"])
 
     def test_http_200_with_unexpected_page_does_not_confirm_login(self):
-        transport = ControlledTransport(
-            [
-                (
-                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
-                    page(
-                        '<input name="javax.faces.ViewState" value="login-state">'
-                        '<input name="form:entrar" value="Entrar">'
-                    ),
-                ),
-                (
-                    "https://outro-host.example/sigaa/portais/discente/discente.jsf",
-                    page('<input name="javax.faces.ViewState" value="error-state">'),
-                ),
-            ]
+        invalid_destinations = (
+            "https://outro-host.example/sigaa/portais/discente/discente.jsf",
+            "https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf",
+            "https://sigaa.ufpb.br/sigaa/portais/discente/erro.jsf",
         )
+        for destination in invalid_destinations:
+            with self.subTest(destination=destination):
+                transport = ControlledTransport(
+                    [
+                        (
+                            "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                            page(
+                                '<input name="javax.faces.ViewState" value="login-state">'
+                                '<input name="form:entrar" value="Entrar">'
+                            ),
+                        ),
+                        (
+                            destination,
+                            page(
+                                '<input name="javax.faces.ViewState" '
+                                'value="error-state">'
+                            ),
+                        ),
+                    ]
+                )
 
-        with self.assertRaisesRegex(PermissionError, "Login não confirmado"):
-            Sigaa(transport).login("aluno", "segredo")
+                with self.assertRaisesRegex(PermissionError, "Login não confirmado"):
+                    Sigaa(transport).login("aluno", "segredo")
 
-    def test_http_200_at_unexpected_sigaa_route_does_not_confirm_login(self):
+    def test_units_rejects_external_or_unexpected_pages(self):
+        unexpected_pages = (
+            (
+                "https://outro-host.example/sigaa/ensino/turma/busca_turma.jsf",
+                page(
+                    '<input name="javax.faces.ViewState" value="query-state">'
+                    '<input name="form:buttonBuscar" value="Buscar">'
+                ),
+            ),
+            (
+                "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
+                page('<input name="javax.faces.ViewState" value="query-state">'),
+            ),
+        )
+        for response in unexpected_pages:
+            with self.subTest(url=response[0]):
+                with self.assertRaisesRegex(ValueError, "página inesperada"):
+                    Sigaa(ControlledTransport([response])).units()
+
+    def test_login_rejects_portal_page_when_protected_form_is_unavailable(self):
         transport = ControlledTransport(
             [
                 (
@@ -105,7 +143,11 @@ class SigaaTest(unittest.TestCase):
                     ),
                 ),
                 (
-                    "https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf",
+                    "https://sigaa.ufpb.br/sigaa/portais/discente/discente.jsf",
+                    page('<input name="javax.faces.ViewState" value="portal-state">'),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
                     page('<input name="javax.faces.ViewState" value="error-state">'),
                 ),
             ]
