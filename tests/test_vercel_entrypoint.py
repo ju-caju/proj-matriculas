@@ -1,5 +1,6 @@
 import http.client
 import importlib.util
+import json
 import os
 import threading
 import unittest
@@ -9,9 +10,15 @@ from unittest.mock import patch
 
 
 ENTRYPOINT = Path(__file__).parent.parent / "api" / "index.py"
+VERCEL_CONFIG = Path(__file__).parent.parent / "vercel.json"
 
 
 class VercelEntrypointTest(unittest.TestCase):
+    def test_function_pattern_matches_python_entrypoints_in_api_root(self):
+        config = json.loads(VERCEL_CONFIG.read_text())
+
+        self.assertIn("api/*.py", config["functions"])
+
     def test_missing_configuration_fails_closed_with_generic_response(self):
         spec = importlib.util.spec_from_file_location("vercel_entrypoint", ENTRYPOINT)
         module = importlib.util.module_from_spec(spec)
