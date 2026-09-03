@@ -83,38 +83,50 @@ class SigaaTest(unittest.TestCase):
         self.assertEqual("docente", transport.calls[5][1]["form:inputNomeDocente"])
         self.assertEqual([], result["rows"])
 
-    def test_http_200_with_unexpected_page_does_not_confirm_login(self):
-        invalid_destinations = (
-            (
-                "https://outro-host.example/sigaa/portais/discente/discente.jsf",
-                "etapa 2A",
-            ),
-            ("https://sigaa.ufpb.br/sigaa/erro/discente-falso.jsf", "etapa 2C"),
-            ("https://sigaa.ufpb.br/sigaa/portais/discente/erro.jsf", "etapa 2C"),
+    def test_external_redirect_does_not_confirm_login(self):
+        transport = ControlledTransport(
+            [
+                (
+                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                    page(
+                        '<input name="javax.faces.ViewState" value="login-state">'
+                        '<input name="form:entrar" value="Entrar">'
+                    ),
+                ),
+                (
+                    "https://outro-host.example/sigaa/portais/discente/discente.jsf",
+                    page('<input name="javax.faces.ViewState" value="error-state">'),
+                ),
+            ]
         )
-        for destination, expected_stage in invalid_destinations:
-            with self.subTest(destination=destination):
-                transport = ControlledTransport(
-                    [
-                        (
-                            "https://sigaa.ufpb.br/sigaa/logon.jsf",
-                            page(
-                                '<input name="javax.faces.ViewState" value="login-state">'
-                                '<input name="form:entrar" value="Entrar">'
-                            ),
-                        ),
-                        (
-                            destination,
-                            page(
-                                '<input name="javax.faces.ViewState" '
-                                'value="error-state">'
-                            ),
-                        ),
-                    ]
-                )
 
-                with self.assertRaisesRegex(PermissionError, expected_stage):
-                    Sigaa(transport).login("aluno", "segredo")
+        with self.assertRaisesRegex(PermissionError, "etapa 2A"):
+            Sigaa(transport).login("aluno", "segredo")
+
+    def test_protected_query_confirms_login_after_new_intermediary_route(self):
+        transport = ControlledTransport(
+            [
+                (
+                    "https://sigaa.ufpb.br/sigaa/logon.jsf",
+                    page('<input name="javax.faces.ViewState" value="login-state">'),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/nova-rota-intermediaria.jsf",
+                    page('<input name="javax.faces.ViewState" value="portal-state">'),
+                ),
+                (
+                    "https://sigaa.ufpb.br/sigaa/ensino/turma/busca_turma.jsf",
+                    page(
+                        '<input name="javax.faces.ViewState" value="query-state">'
+                        '<input name="form:buttonBuscar" value="Buscar">'
+                    ),
+                ),
+            ]
+        )
+
+        Sigaa(transport).login("aluno", "segredo")
+
+        self.assertEqual(QUERY, transport.calls[2][0])
 
     def test_login_reports_when_sigaa_returns_login_form(self):
         transport = ControlledTransport(

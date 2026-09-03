@@ -10,12 +10,6 @@ from .parser import SigaaPage
 BASE = "https://sigaa.ufpb.br"
 LOGIN = "/sigaa/logon.jsf"
 QUERY = "/sigaa/ensino/turma/busca_turma.jsf"
-PORTAL_PATHS = {
-    "/sigaa/portais/discente/discente.jsf",
-    "/sigaa/verportaldiscente.do",
-}
-
-
 class SigaaTransport(Protocol):
     def request(self, path, fields=None): ...
 
@@ -117,23 +111,16 @@ class Sigaa:
         }
         url, result = self.transport.request(LOGIN, fields)
         destination = urlsplit(url)
-        path = destination.path.lower()
         authenticated_page = (
             destination.scheme == "https"
             and destination.netloc == "sigaa.ufpb.br"
-            and path in PORTAL_PATHS
             and "form:senha" not in result.inputs
-            and "javax.faces.ViewState" in result.inputs
         )
         if not authenticated_page:
             if destination.scheme != "https" or destination.netloc != "sigaa.ufpb.br":
                 detail = "2A: o redirecionamento saiu do domínio do SIGAA"
-            elif "form:senha" in result.inputs:
-                detail = "2B: o SIGAA devolveu a tela de login"
-            elif path not in PORTAL_PATHS:
-                detail = "2C: o SIGAA redirecionou para uma página inesperada"
             else:
-                detail = "2D: a página do portal veio incompleta"
+                detail = "2B: o SIGAA devolveu a tela de login"
             raise PermissionError("Falha no login, etapa " + detail + ".")
         try:
             self._validate_query_page(*self.transport.request(QUERY))
