@@ -14,6 +14,10 @@ make install
 make check
 ```
 
+`make check` inclui `make build`, uma validação estática sem rede que confirma
+os arquivos referenciados pela página e que `api/index.py` é o único entrypoint
+da Vercel. Para executá-la isoladamente, use `make build`.
+
 Para testar a inicialização isolada em Docker:
 
 ```sh

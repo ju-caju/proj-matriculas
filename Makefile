@@ -1,4 +1,4 @@
-.PHONY: install format format-check lint typecheck test coverage audit smoke-test check
+.PHONY: install format format-check lint typecheck test coverage audit build smoke-test check
 
 install:
 	uv sync --locked
@@ -28,7 +28,10 @@ coverage:
 audit:
 	uv export --locked --no-dev --format requirements.txt | uvx --from pip-audit pip-audit --strict -r /dev/stdin
 
+build:
+	uv run python scripts/validate_static.py
+
 smoke-test:
 	uv run python scripts/smoke_test.py
 
-check: format-check lint typecheck test coverage audit
+check: format-check lint typecheck test coverage audit build

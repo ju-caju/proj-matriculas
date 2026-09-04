@@ -47,6 +47,9 @@ jobs:
       - name: Check types
         run: make typecheck
 
+      - name: Validate static bundle
+        run: make build
+
       - name: Run tests
         run: make test
 

@@ -16,9 +16,9 @@ make check
 `make check` reproduz as verificações locais do CI: formatação
 (`make format-check`), lint (`make lint`), tipos (`make typecheck`), os testes
 Python e JavaScript (`make test`), cobertura Python (`make coverage`) e auditoria
-das dependências travadas (`make audit`). O CI ainda executa o scanner de segredos
-e o smoke test HTTP após iniciar o servidor. Para formatar os arquivos localmente,
-use `make format`.
+das dependências travadas (`make audit`), o bundle estático (`make build`) e o
+smoke test HTTP após iniciar o servidor; o CI ainda executa o scanner de segredos.
+Para formatar os arquivos localmente, use `make format`.
 
 Os testes usam somente fixtures HTML sanitizadas e implementações controladas.
 Eles não precisam de Redis, Vercel ou acesso ao SIGAA. As regras obrigatórias
@@ -30,6 +30,10 @@ de runtime, mas o fluxo suportado é `uv sync --locked`.
 O [runbook de entrega e operação](RUNBOOK.md) documenta Docker local, smoke test,
 separação de segredos entre Preview e Production, deploy, observabilidade,
 incidente e rollback na Vercel.
+A [arquitetura](docs/ARQUITETURA.md) descreve o caminho navegador–FastAPI–sessão–
+gateway–SIGAA, os contratos e a diferença entre os ambientes. As decisões
+registradas estão em [`docs/adr/`](docs/adr/), e o [modelo de ameaças](MODELO-DE-AMEACAS.md)
+lista controles, riscos residuais e resposta a incidentes.
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 
