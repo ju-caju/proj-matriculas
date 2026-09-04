@@ -1,6 +1,7 @@
 import importlib.util
 import json
 import os
+import tomllib
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -11,6 +12,7 @@ from fastapi.testclient import TestClient
 ENTRYPOINT = Path(__file__).parent.parent / "api" / "index.py"
 API_ROOT = ENTRYPOINT.parent
 VERCEL_CONFIG = Path(__file__).parent.parent / "vercel.json"
+PYPROJECT = Path(__file__).parent.parent / "pyproject.toml"
 
 
 class VercelEntrypointTest(unittest.TestCase):
@@ -25,8 +27,10 @@ class VercelEntrypointTest(unittest.TestCase):
 
     def test_vercel_routes_all_paths_to_the_fastapi_entrypoint(self):
         config = json.loads(VERCEL_CONFIG.read_text())
+        project = tomllib.loads(PYPROJECT.read_text())
 
         self.assertEqual("fastapi", config["framework"])
+        self.assertEqual("api.index:app", project["tool"]["vercel"]["entrypoint"])
         self.assertEqual({"api/index.py"}, set(config["functions"]))
         self.assertEqual(
             [{"source": "/(.*)", "destination": "/api/index.py"}],

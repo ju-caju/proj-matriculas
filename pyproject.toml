@@ -20,6 +20,9 @@ dev = [
 [tool.uv]
 package = false
 
+[tool.vercel]
+entrypoint = "api.index:app"
+
 [tool.ruff]
 target-version = "py312"
 line-length = 88
