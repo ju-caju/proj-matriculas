@@ -129,12 +129,17 @@ def make_demo_app(environment=None):
     deployment_host = environment.get("VERCEL_URL")
     if not deployment_host or not _is_trusted_host(deployment_host):
         raise ValueError("Domínio da Vercel inválido.")
+    configured_hosts = (deployment_host, environment.get("APP_HOST"))
+    for host in configured_hosts:
+        if host is not None and not _is_trusted_host(host):
+            raise ValueError("Domínio da Vercel inválido.")
+    hosts = tuple(dict.fromkeys(host for host in configured_hosts if host))
 
     return create_app(
         client_factory=DemoSigaa,
         sessions=DemoSessionStore(),
         secure_cookie=True,
         cookie_path="/api",
-        valid_hosts=(deployment_host,),
-        valid_origins=(None, "https://" + deployment_host),
+        valid_hosts=hosts,
+        valid_origins=(None, *("https://" + host for host in hosts)),
     )

@@ -146,7 +146,9 @@ variável na Vercel, selecione apenas **Preview** e deixe **Production** desmarc
    ```
 
 4. Confirme que `VERCEL_URL`, variável de sistema da Vercel, está disponível para
-   as funções. Crie uma implantação de prévia sem promover para produção.
+   as funções. Para usar um alias fixo da branch, configure também `APP_HOST` com
+   esse domínio somente em **Preview** e na branch `demo`. Crie uma implantação de
+   prévia sem promover para produção.
 5. Não habilite recarga automática, plano pago nem cobrança por excedentes para
    cumprir o limite deste ticket.
 

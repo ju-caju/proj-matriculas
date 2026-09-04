@@ -80,6 +80,25 @@ class VercelEntrypointTest(unittest.TestCase):
 
         self.assertEqual(200, response.status_code)
 
+    def test_demo_preview_accepts_its_configured_public_alias(self):
+        spec = importlib.util.spec_from_file_location("vercel_demo_alias", ENTRYPOINT)
+        module = importlib.util.module_from_spec(spec)
+        environment = {
+            "APP_MODE": "demo",
+            "VERCEL_ENV": "preview",
+            "VERCEL_URL": "temporary.example.vercel.app",
+            "APP_HOST": "demo.example.vercel.app",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            spec.loader.exec_module(module)
+
+        response = TestClient(module.app).get(
+            "/api/session",
+            headers={"host": "demo.example.vercel.app"},
+        )
+
+        self.assertEqual(200, response.status_code)
+
     def test_demo_mode_fails_closed_in_a_production_deployment(self):
         spec = importlib.util.spec_from_file_location("vercel_demo_prod", ENTRYPOINT)
         module = importlib.util.module_from_spec(spec)
@@ -87,6 +106,24 @@ class VercelEntrypointTest(unittest.TestCase):
             "APP_MODE": "demo",
             "VERCEL_ENV": "production",
             "VERCEL_URL": "prod.example.vercel.app",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            spec.loader.exec_module(module)
+
+        response = TestClient(module.app).get("/api/session")
+
+        self.assertEqual(503, response.status_code)
+
+    def test_demo_preview_rejects_an_invalid_public_alias(self):
+        spec = importlib.util.spec_from_file_location(
+            "vercel_demo_bad_alias", ENTRYPOINT
+        )
+        module = importlib.util.module_from_spec(spec)
+        environment = {
+            "APP_MODE": "demo",
+            "VERCEL_ENV": "preview",
+            "VERCEL_URL": "temporary.example.vercel.app",
+            "APP_HOST": "https://unsafe.example/redirect",
         }
         with patch.dict(os.environ, environment, clear=True):
             spec.loader.exec_module(module)
