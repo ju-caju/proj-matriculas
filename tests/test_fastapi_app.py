@@ -1,8 +1,12 @@
 import unittest
+from unittest.mock import patch
 
+from cryptography.fernet import Fernet
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
+from backend.production import make_production_app
 from backend.sessions import MemorySessionStore
 
 
@@ -18,6 +22,28 @@ class ControlledClient:
 
     def query(self, year, period, unit, discipline="", teacher=""):
         return {"rows": [], "units": self.units()}
+
+
+class FalseyLimiter:
+    def __init__(self):
+        self.calls = []
+
+    def __bool__(self):
+        return False
+
+    def allow(self, address):
+        self.calls.append(address)
+        return True
+
+
+class UnavailableLimiter:
+    def allow(self, address):
+        raise ConnectionError("rate limit unavailable")
+
+
+class InvalidCredentialsClient(ControlledClient):
+    def login(self, username, password):
+        raise PermissionError("Login não confirmado.")
 
 
 class FastApiTest(unittest.TestCase):
@@ -94,6 +120,123 @@ class FastApiTest(unittest.TestCase):
         self.assertEqual(415, response.status_code)
         self.assertEqual({"error": "JSON necessário."}, response.json())
         self.assertEqual("DENY", response.headers["x-frame-options"])
+
+    def test_production_factory_exposes_fastapi_login_and_logout(self):
+        environment = {
+            "KV_REST_API_URL": "https://redis.example",
+            "KV_REST_API_TOKEN": "token",
+            "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+            "VERCEL_URL": "preview.example.vercel.app",
+        }
+        with patch("backend.production.RedisRestClient.execute"):
+            app = make_production_app(environment)
+
+        self.assertIsInstance(app, FastAPI)
+        self.assertIn("/api/login", {route.path for route in app.routes})
+        self.assertIn("/api/logout", {route.path for route in app.routes})
+
+    def test_login_uses_a_configured_limiter_even_when_it_is_falsey(self):
+        limiter = FalseyLimiter()
+        app = create_app(
+            client_factory=lambda: ControlledClient(),
+            sessions=MemorySessionStore(token_factory=lambda: "session-id"),
+            login_limiter=limiter,
+            client_ip=lambda request: "203.0.113.10",
+        )
+
+        response = TestClient(app).post(
+            "/api/login", json={"username": "alice", "password": "secret"}
+        )
+
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(["203.0.113.10"], limiter.calls)
+
+    def test_login_rejects_oversized_json_before_calling_gateway(self):
+        response = self.client.post(
+            "/api/login",
+            content='{"username":"alice","password":"' + "x" * 8200 + '"}',
+            headers={"content-type": "application/json"},
+        )
+
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(
+            {"error": "Dados inválidos ou resposta inesperada do SIGAA."},
+            response.json(),
+        )
+        self.assertEqual([], self.clients)
+
+    def test_login_replaces_previous_session_and_logout_expires_it(self):
+        identifiers = iter(("session-a", "session-b"))
+        sessions = MemorySessionStore(token_factory=lambda: next(identifiers))
+        clients = []
+
+        def factory():
+            client = ControlledClient()
+            clients.append(client)
+            return client
+
+        client = TestClient(create_app(client_factory=factory, sessions=sessions))
+        first = client.post(
+            "/api/login", json={"username": "alice", "password": "secret"}
+        )
+        first_cookie = first.headers["set-cookie"].split(";", 1)[0]
+        second = client.post(
+            "/api/login", json={"username": "bob", "password": "secret"}
+        )
+        second_cookie = second.headers["set-cookie"].split(";", 1)[0]
+
+        self.assertNotEqual(first_cookie, second_cookie)
+        client.cookies.set("session", "session-a")
+        self.assertEqual(401, client.post("/api/units", json={}).status_code)
+        client.cookies.set("session", "session-b")
+        self.assertEqual(
+            {"units": [{"value": "1", "label": "bob"}]},
+            client.post("/api/units", json={}).json(),
+        )
+
+        logout = client.post("/api/logout", json={})
+
+        self.assertEqual(200, logout.status_code)
+        self.assertIn("Max-Age=0", logout.headers["set-cookie"])
+        self.assertEqual(401, client.post("/api/units", json={}).status_code)
+        client.cookies.set("session", "session-b")
+        self.assertEqual(
+            {"authenticated": False, "expired": True},
+            client.get("/api/session").json(),
+        )
+        self.assertEqual(["alice", "bob"], [item.username for item in clients])
+
+    def test_rate_limit_dependency_failure_is_publicly_controlled(self):
+        app = create_app(
+            client_factory=lambda: ControlledClient(),
+            sessions=MemorySessionStore(token_factory=lambda: "session-id"),
+            login_limiter=UnavailableLimiter(),
+            client_ip=lambda request: "203.0.113.10",
+        )
+
+        response = TestClient(app).post(
+            "/api/login", json={"username": "alice", "password": "secret"}
+        )
+
+        self.assertEqual(503, response.status_code)
+        self.assertEqual(
+            {"error": "Serviço temporariamente indisponível."}, response.json()
+        )
+
+    def test_invalid_credentials_keep_the_public_login_error_contract(self):
+        app = create_app(
+            client_factory=InvalidCredentialsClient,
+            sessions=MemorySessionStore(token_factory=lambda: "session-id"),
+        )
+
+        response = TestClient(app).post(
+            "/api/login", json={"username": "alice", "password": "wrong"}
+        )
+
+        self.assertEqual(401, response.status_code)
+        self.assertEqual({"error": "Login não confirmado."}, response.json())
+        self.assertNotIn("alice", response.text)
+        self.assertNotIn("wrong", response.text)
 
 
 if __name__ == "__main__":

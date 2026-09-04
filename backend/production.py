@@ -15,7 +15,7 @@ def vercel_client_ip(request):
         raise ConnectionError("Endereço de origem não confiável.") from exc
 
 
-def make_production_handler(environment=None):
+def _production_dependencies(environment):
     environment = os.environ if environment is None else environment
     redis = RedisRestClient(
         environment.get("KV_REST_API_URL"),
@@ -39,9 +39,31 @@ def make_production_handler(environment=None):
             if host
         )
     )
+    return redis, sessions, hosts
+
+
+def make_production_handler(environment=None):
+    redis, sessions, hosts = _production_dependencies(environment)
     return make_handler(
         Sigaa,
         sessions,
+        login_limiter=RedisRateLimiter(redis),
+        client_ip=vercel_client_ip,
+        secure_cookie=True,
+        cookie_path="/api",
+        valid_hosts=hosts,
+        valid_origins=(None, *("https://" + host for host in hosts)),
+    )
+
+
+def make_production_app(environment=None):
+    """Build the FastAPI application with the production dependencies."""
+    from .app import create_app
+
+    redis, sessions, hosts = _production_dependencies(environment)
+    return create_app(
+        client_factory=Sigaa,
+        sessions=sessions,
         login_limiter=RedisRateLimiter(redis),
         client_ip=vercel_client_ip,
         secure_cookie=True,

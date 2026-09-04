@@ -13,6 +13,8 @@ from .http import ROOT, SECURITY_HEADERS
 from .sessions import MemorySessionStore, SessionStore
 from .sigaa import Sigaa, SigaaClient
 
+MAX_JSON_BODY = 8192
+
 
 class HealthResponse(BaseModel):
     status: str
@@ -67,6 +69,17 @@ def _operation_error(exc: Exception) -> JSONResponse:
     return _error(502, "Não foi possível consultar o SIGAA. Tente novamente.")
 
 
+def _body_is_too_large(request: Request) -> bool:
+    """Reject oversized JSON before FastAPI parses credentials or other fields."""
+    value = request.headers.get("content-length")
+    if value is None:
+        return False
+    try:
+        return int(value) > MAX_JSON_BODY
+    except ValueError:
+        return True
+
+
 def create_app(
     client_factory: Callable[[], SigaaClient] = Sigaa,
     sessions: SessionStore | None = None,
@@ -108,6 +121,8 @@ def create_app(
             != "application/json"
         ):
             response = _error(415, "JSON necessário.")
+        elif request.method == "POST" and _body_is_too_large(request):
+            response = _error(400, "Dados inválidos ou resposta inesperada do SIGAA.")
         else:
             response = await call_next(request)
 
@@ -179,7 +194,7 @@ def create_app(
     def login(request: Request, payload: LoginRequest):
         try:
             session_id, client = session(request, refresh=False)
-            if login_limiter:
+            if login_limiter is not None:
                 address = client_ip(request) if client_ip else None
                 if not login_limiter.allow(address):
                     return _error(

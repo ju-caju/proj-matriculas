@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlsplit
 
 from backend.http import SECURITY_HEADERS
-from backend.production import make_production_handler
+from backend.production import make_production_app, make_production_handler
 
 
 class _UnavailableHandler(BaseHTTPRequestHandler):
@@ -42,6 +42,11 @@ class _UnavailableHandler(BaseHTTPRequestHandler):
     do_GET = reply
     do_POST = reply
 
+
+try:
+    app = make_production_app()
+except ValueError:
+    pass
 
 try:
     _base_handler = make_production_handler()
