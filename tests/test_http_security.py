@@ -189,6 +189,15 @@ class SecureApiTest(unittest.TestCase):
         self.assertEqual(900, self.redis.ttls["login:203.0.113.10"])
         self.assertEqual(200, self.login(ip="203.0.113.11", cookie=False)[0])
 
+    def test_students_sharing_institutional_nat_share_the_same_window(self):
+        for username in ("alice", "bob", "carol", "davi", "erin"):
+            self.assertEqual(
+                200,
+                self.login(username=username, cookie=False, ip="203.0.113.10")[0],
+            )
+        status, _, _ = self.login(username="fran", cookie=False, ip="203.0.113.10")
+        self.assertEqual(429, status)
+
     def test_rate_limit_can_be_verified_without_contacting_sigaa(self):
         for _ in range(5):
             status, _, _ = self.request("/api/login", {"probe": True}, cookie=False)

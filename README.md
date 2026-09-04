@@ -27,7 +27,13 @@ de runtime, mas o fluxo suportado é `uv sync --locked`.
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 
-O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor local escuta apenas no computador. A versão pública usa a configuração de produção do FastAPI descrita abaixo.
+O navegador envia usuário e senha somente no POST de login; o servidor os encaminha
+ao SIGAA uma vez, descarta a senha ao terminar a tentativa e guarda apenas os
+cookies temporários da sessão. O servidor obtém o ViewState de cada formulário e
+mantém esses cookies separados por sessão. As sessões locais expiram após 30
+minutos de inatividade; sair descarta a sessão local. O servidor local escuta
+apenas no computador. A versão pública usa a configuração de produção do FastAPI
+descrita abaixo.
 
 Filtros iniciais: graduação, 2026.2, unidade 2151, com os demais campos da consulta capturada. A lista de unidades vem do SIGAA. Busca por texto filtra os resultados já carregados. O retorno HTML do SIGAA é convertido em dados; scripts e links de ação do portal não são executados.
 
@@ -35,7 +41,7 @@ Depende da estrutura atual dos formulários e da tabela do SIGAA; alterações n
 
 ## Planejador semanal
 
-Arraste uma turma para a semana ou use Adicionar. Os blocos são posicionados automaticamente; para remover, use o botão na lista ou clique no bloco para abrir seus detalhes. Choques ficam em vermelho e a lista abaixo da grade informa as turmas e os horários envolvidos. O planejamento não efetua matrícula.
+Arraste uma turma para a semana ou use Adicionar. Os blocos são posicionados automaticamente; para remover, use o botão na lista ou clique no bloco para abrir seus detalhes. Choques ficam em vermelho e a lista abaixo da grade informa as turmas e os horários envolvidos. O planejamento não efetua matrícula, cancelamento ou qualquer outra ação no SIGAA. Esta aplicação não é afiliada à UFPB nem substitui os canais oficiais.
 
 A grade é salva no armazenamento local deste navegador, por semestre (compartilhada entre contas que usam o mesmo navegador). Alterar unidade mantém as seleções. Limpar grade remove o planejamento do semestre atual.
 
@@ -170,3 +176,18 @@ e o parser sem copiar HAR, cookies ou páginas pessoais para o repositório.
 
 O planejamento e a exportação PNG continuam no navegador. O servidor recebe apenas
 as consultas necessárias ao SIGAA e não recebe a grade montada pelo usuário.
+
+## Rate limit e modelo de ameaças
+
+O login aceita no máximo cinco tentativas por endereço IP em uma janela de 15
+minutos. O contador é compartilhado no Redis: estudantes diferentes que usam o
+mesmo IP público de uma rede institucional compartilham a janela (NAT). Uma sexta
+tentativa recebe `429`; depois de 15 minutos a janela pode ser iniciada novamente.
+Esse comportamento é intencional para conter abuso, embora possa bloquear vários
+estudantes juntos.
+
+Os ativos, fronteiras de confiança, ameaças, controles, riscos residuais e o
+procedimento de resposta a incidentes estão em
+[`MODELO-DE-AMEACAS.md`](MODELO-DE-AMEACAS.md). Logs técnicos contêm apenas evento,
+rota, status, classe do resultado e duração; nunca credenciais, cookies, filtros,
+HTML ou dados acadêmicos.

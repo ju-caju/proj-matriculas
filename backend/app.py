@@ -1,6 +1,9 @@
 """FastAPI application for the local and Vercel runtimes."""
 
+import json
+import logging
 import re
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -21,6 +24,61 @@ from .web import ROOT, SECURITY_HEADERS
 
 MAX_JSON_BODY = 8192
 CONFIGURATION_ERROR = {"error": "Serviço temporariamente indisponível."}
+LOG_ALLOWED_FIELDS = frozenset(("event", "route", "status", "result", "duration_ms"))
+_LOG_ROUTES = frozenset(
+    (
+        "/",
+        "/app.js",
+        "/schedule.js",
+        "/style.css",
+        "/health",
+        "/api/health",
+        "/api/session",
+        "/api/login",
+        "/api/logout",
+        "/api/units",
+        "/api/turmas",
+    )
+)
+logger = logging.getLogger("matriculas.http")
+
+
+def _safe_route(request: Request) -> str:
+    path = request.scope.get("path", "")
+    if isinstance(path, str) and path in _LOG_ROUTES:
+        return path
+    return "/unknown"
+
+
+def _result_class(status: int) -> str:
+    if 200 <= status < 300:
+        return "ok"
+    if status == 401:
+        return "authentication"
+    if status == 429:
+        return "rate_limited"
+    if 400 <= status < 500:
+        return "rejected"
+    if status == 503:
+        return "dependency_unavailable"
+    return "error"
+
+
+def _log_request(request: Request, status: int, started: float) -> None:
+    payload = {
+        "event": "http_request",
+        "route": _safe_route(request),
+        "status": status,
+        "result": _result_class(status),
+        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+    }
+    logger.info(
+        json.dumps(
+            {key: value for key, value in payload.items() if key in LOG_ALLOWED_FIELDS},
+            separators=(",", ":"),
+            ensure_ascii=True,
+        )
+    )
 
 
 class HealthResponse(BaseModel):
@@ -125,11 +183,16 @@ def unavailable_app() -> FastAPI:
 
     @app.middleware("http")
     async def security_headers(request: Request, call_next):
-        response = await call_next(request)
-        response.headers["Cache-Control"] = "no-store"
-        for key, value in SECURITY_HEADERS:
-            response.headers[key] = value
-        return response
+        started = time.perf_counter()
+        response = None
+        try:
+            response = await call_next(request)
+            response.headers["Cache-Control"] = "no-store"
+            for key, value in SECURITY_HEADERS:
+                response.headers[key] = value
+            return response
+        finally:
+            _log_request(request, response.status_code if response else 500, started)
 
     @app.api_route(
         "/{path:path}",
@@ -225,29 +288,35 @@ def create_app(
 
     @app.middleware("http")
     async def security_and_request_checks(request: Request, call_next):
+        started = time.perf_counter()
         response = None
-        if request.headers.get("host") not in valid_hosts:
-            response = _error(403, "Host inválido.")
-        elif (
-            request.method == "POST"
-            and request.headers.get("origin") not in valid_origins
-        ):
-            response = _error(403, "Origem inválida.")
-        elif (
-            request.method == "POST"
-            and request.headers.get("content-type", "").split(";", 1)[0]
-            != "application/json"
-        ):
-            response = _error(415, "JSON necessário.")
-        elif request.method == "POST" and _body_is_too_large(request):
-            response = _error(400, "Dados inválidos ou resposta inesperada do SIGAA.")
-        else:
-            response = await call_next(request)
+        try:
+            if request.headers.get("host") not in valid_hosts:
+                response = _error(403, "Host inválido.")
+            elif (
+                request.method == "POST"
+                and request.headers.get("origin") not in valid_origins
+            ):
+                response = _error(403, "Origem inválida.")
+            elif (
+                request.method == "POST"
+                and request.headers.get("content-type", "").split(";", 1)[0]
+                != "application/json"
+            ):
+                response = _error(415, "JSON necessário.")
+            elif request.method == "POST" and _body_is_too_large(request):
+                response = _error(
+                    400, "Dados inválidos ou resposta inesperada do SIGAA."
+                )
+            else:
+                response = await call_next(request)
 
-        response.headers["Cache-Control"] = "no-store"
-        for key, value in SECURITY_HEADERS:
-            response.headers[key] = value
-        return response
+            response.headers["Cache-Control"] = "no-store"
+            for key, value in SECURITY_HEADERS:
+                response.headers[key] = value
+            return response
+        finally:
+            _log_request(request, response.status_code if response else 500, started)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
