@@ -223,6 +223,7 @@ class BrowserFlowTest(unittest.TestCase):
                 "--headless",
                 "--no-sandbox",
                 "--disable-gpu",
+                "--disable-dev-shm-usage",
                 "--remote-debugging-port=0",
                 "--user-data-dir=" + profile.name,
                 "about:blank",
@@ -234,14 +235,22 @@ class BrowserFlowTest(unittest.TestCase):
         devtools = None
         try:
             browser_url = None
-            deadline = time.monotonic() + 10
+            chrome_errors = []
+            deadline = time.monotonic() + 30
             while time.monotonic() < deadline and browser_url is None:
                 ready, _, _ = select.select([chrome.stderr], [], [], 0.2)
                 if ready:
                     line = chrome.stderr.readline()
+                    chrome_errors.append(line.rstrip())
                     if "DevTools listening on " in line:
                         browser_url = line.split("DevTools listening on ", 1)[1].strip()
-            self.assertIsNotNone(browser_url, "Chrome não abriu o protocolo DevTools")
+                elif chrome.poll() is not None:
+                    break
+            self.assertIsNotNone(
+                browser_url,
+                "Chrome não abriu o protocolo DevTools:\n"
+                + "\n".join(chrome_errors[-20:]),
+            )
             browser = urllib.parse.urlparse(browser_url)
             with urllib.request.urlopen(
                 f"http://{browser.netloc}/json/list", timeout=5
