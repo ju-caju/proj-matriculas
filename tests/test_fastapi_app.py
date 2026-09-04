@@ -114,6 +114,10 @@ class FastApiTest(unittest.TestCase):
             ("/", "text/html; charset=utf-8"),
             ("/app.js", "text/javascript; charset=utf-8"),
             ("/schedule.js", "text/javascript; charset=utf-8"),
+            ("/frontend/dom.js", "text/javascript; charset=utf-8"),
+            ("/frontend/plan-store.js", "text/javascript; charset=utf-8"),
+            ("/frontend/api-client.js", "text/javascript; charset=utf-8"),
+            ("/frontend/grade-image.js", "text/javascript; charset=utf-8"),
             ("/style.css", "text/css; charset=utf-8"),
         ):
             with self.subTest(path=path):

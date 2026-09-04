@@ -1,14 +1,12 @@
-const $ = s => document.querySelector(s);
+const { $, el, name, color } = FrontendDom;
 const S = Schedule;
 let rows = [], selected = [], semester = '2026.2', dragging = null, dragMode = null, busy = false;
-const el = (tag, text, cls) => {const e=document.createElement(tag);if(text!==undefined)e.textContent=text;if(cls)e.className=cls;return e;};
-const name = r => r.disciplina.replace(/\s*\(GRADUAÇÃO\)\s*$/i,'');
-const color = r => 'color-'+([...r.disciplina].reduce((n,c)=>(n*31+c.charCodeAt(0))>>>0,0)%6);
+const planStore = PlanStore.createPlanStore({ key: S.key });
 function status(message,error=false){$('#status').textContent=message;$('#status').classList.toggle('error',error);}
-function save(){try{localStorage.setItem('ufpb-plan:'+semester,JSON.stringify(selected));}catch{$('#save-note').textContent='Não foi possível salvar. Mantenha esta aba aberta.';}}
-function loadPlan(){try{const data=JSON.parse(localStorage.getItem('ufpb-plan:'+semester)||'[]');selected=Array.isArray(data)?data.filter(r=>r&&r.periodo===semester&&['disciplina','turma','horario'].every(k=>typeof r[k]==='string')):[];selected=[...new Map(selected.map(r=>[S.key(r),r])).values()];}catch{selected=[];}}
+function save(){if(!planStore.save(semester,selected))$('#save-note').textContent='Não foi possível salvar. Mantenha esta aba aberta.';}
+function loadPlan(){selected=planStore.load(semester);}
 function authenticated(value){$('#login-panel').hidden=value;$('#query-panel').hidden=!value;$('#logout').hidden=!value;if(value)loadPlan();else{rows=[];selected=[];}render();}
-async function api(path,data){const response=await fetch(path,data===undefined?{}:{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok){if(response.status===401)authenticated(false);throw new Error(result.error||'Não foi possível concluir.');}return result;}
+const api = ApiClient.createApi({ onUnauthorized: () => authenticated(false) }).request;
 function remove(key){selected=selected.filter(r=>S.key(r)!==key);save();render();status('Turma removida da grade.');}
 function add(key){const row=rows.find(r=>S.key(r)===key);if(!row||selected.some(r=>S.key(r)===key))return;if(row.periodo!==semester||S.parse(row.horario).errors.length){status('Confira o horário e o período desta turma.',true);return;}selected.push(row);save();render();const hits=S.conflicts(selected).filter(c=>S.key(c.a)===key||S.key(c.b)===key);status(hits.length?'Turma adicionada com choque. Confira os detalhes abaixo da grade.':'Turma adicionada: '+S.describe(row.horario),!!hits.length);}
 function renderCatalog(){
@@ -86,51 +84,9 @@ api('/api/session').then(async result=>{authenticated(result.authenticated);if(r
 
 async function loadUnits(){try{const result=await api('/api/units',{});const select=$('[name=unit]');select.replaceChildren(new Option('Todos os departamentos',''),...result.units.filter(u=>u.value&&u.value!=='0').map(u=>new Option(u.label,u.value)));$('#empty').textContent='Busque por disciplina ou professor para encontrar turmas.';status('Informe os nomes acima e clique em Consultar.');}catch(error){status(error.message,true);}}
 
-// Renderização independente da rolagem e do tamanho da janela, sem enviar dados.
-function gradeImage(courses, term) {
- const days=[2,3,4,5,6,7];if(courses.some(r=>S.parse(r.horario).meetings.some(m=>m.day===1)))days.push(1);
- const canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');
- const width=1500,margin=40,axis=76,top=154,gridHeight=1104,col=(width-2*margin-axis)/days.length;
- const clashes=S.conflicts(courses),unknown=courses.some(r=>S.parse(r.horario).errors.length);
- const font=(size,bold=false)=>{ctx.font=`${bold?'600':'400'} ${size}px Calibri, sans-serif`;};
- function wrap(text,maxWidth){const lines=[];let line='';for(const word of String(text).split(/\s+/)){if(ctx.measureText(line?line+' '+word:word).width>maxWidth&&line){lines.push(line);line='';}for(const character of word){if(ctx.measureText(line+character).width>maxWidth&&line){lines.push(line);line='';}line+=character;}line+=' ';}if(line.trim())lines.push(line.trim());return lines;}
- font(18,true);
- const legends=courses.map((r,i)=>{font(18,true);const title=wrap(`${i+1}. ${name(r)} · ${r.turma}`,width-2*margin-28);font(16);const details=wrap(`${S.describe(r.horario)} · ${r.docente||''} · ${r.local||''} · ${r.horario}`,width-2*margin-28);return{r,title,details,height:title.length*23+details.length*21+24};});
- const conflictLines=[];font(16);
- for(const c of clashes)conflictLines.push(...wrap(`Choque: ${courses.indexOf(c.a)+1} × ${courses.indexOf(c.b)+1} — ${c.hits.map(h=>`${S.DAYS[h.day]} ${S.time(h.start)}–${S.time(h.end)}`).join('; ')}`,width-2*margin));
- const height=top+gridHeight+64+legends.reduce((n,l)=>n+l.height,0)+conflictLines.length*23+60;
- canvas.width=width*2;canvas.height=height*2;ctx.scale(2,2);ctx.fillStyle='#ffffff';ctx.fillRect(0,0,width,height);ctx.textBaseline='top';
- const text=(value,x,y,size=16,bold=false,color='#292524')=>{font(size,bold);ctx.fillStyle=color;ctx.fillText(value,x,y);};
- text('Minha grade · UFPB',margin,30,30,true);text(`${term} · ${courses.length} turmas`,margin,72,19);
- text(unknown?'Há horários não reconhecidos: confira os detalhes abaixo.':clashes.length?`${clashes.length} par(es) de turmas com choque de horário`:'Sem choques de horário',margin,103,16,false,clashes.length||unknown?'#a32620':'#365d3f');
- ctx.fillStyle='#f4f1ec';ctx.fillRect(margin,top-32,width-2*margin,32);
- days.forEach((day,i)=>text(S.DAYS[day],margin+axis+i*col+10,top-25,16,true));
- for(let m=420;m<=1320;m+=60){const y=top+(m-420)/920*gridHeight;ctx.strokeStyle='#e5e0d8';ctx.beginPath();ctx.moveTo(margin+axis,y);ctx.lineTo(width-margin,y);ctx.stroke();text(S.time(m),margin+8,y+3,13);}
- for(let i=0;i<=days.length;i++){const x=margin+axis+i*col;ctx.strokeStyle='#dedbd5';ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,top+gridHeight);ctx.stroke();}
- const palette=[['#e9efe3','#708450'],['#f4e9d7','#a17b3d'],['#ece5f2','#9477aa'],['#e0efeb','#548c7d'],['#f1e2e8','#a57286'],['#e9e7de','#8a8466']];
- days.forEach((day,di)=>{
-  const events=courses.flatMap((r,index)=>S.parse(r.horario).meetings.filter(m=>m.day===day).map(m=>({...m,r,index})));
-  for(const event of S.layout(events)){
-   const clash=courses.some(r=>S.key(r)!==S.key(event.r)&&S.parse(r.horario).meetings.some(m=>S.overlap(event,m)));
-   const [bg,border]=clash?['#ffe5e0','#bc3f35']:palette[Number(color(event.r).slice(-1))];
-   const x=margin+axis+di*col+event.lane/event.lanes*col+3,y=top+(event.start-420)/920*gridHeight+2,w=col/event.lanes-6,h=(event.end-event.start)/920*gridHeight-4;
-   ctx.fillStyle=bg;ctx.fillRect(x,y,w,h);ctx.strokeStyle=border;ctx.strokeRect(x,y,w,h);
-   ctx.save();ctx.beginPath();ctx.rect(x+4,y+3,Math.max(0,w-8),h-6);ctx.clip();
-   text(`${event.index+1}${clash?' · CHOQUE':''}`,x+7,y+6,13,true,clash?'#a32620':'#292524');font(14,true);
-   const lines=wrap(name(event.r),Math.max(10,w-14));const maxLines=Math.max(1,Math.floor((h-56)/17));
-   lines.slice(0,maxLines).forEach((line,i)=>text(line+(i===maxLines-1&&lines.length>maxLines?'…':''),x+7,y+26+i*17,14,true));
-   text(`${S.time(event.start)}–${S.time(event.end)}`,x+7,y+h-22,12);ctx.restore();
-  }
- });
- let y=top+gridHeight+30;text('Disciplinas e horários',margin,y,22,true);y+=34;
- for(const entry of legends){const [,border]=palette[Number(color(entry.r).slice(-1))];ctx.fillStyle=border;ctx.fillRect(margin,y,4,entry.height-16);for(const line of entry.title){text(line,margin+16,y,18,true);y+=23;}for(const line of entry.details){text(line,margin+16,y,16);y+=21;}y+=24;}
- for(const line of conflictLines){text(line,margin,y,16,false,'#a32620');y+=23;}
- text('Planejamento pessoal · não substitui a matrícula no SIGAA.',margin,y+16,14,false,'#71675d');
- return canvas;
-}
 $('#export-plan').addEventListener('click',async()=>{
  const button=$('#export-plan');if(!selected.length)return;button.disabled=true;
- try{await document.fonts.ready;const canvas=gradeImage([...selected],semester);const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error()),'image/png'));const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`minha-grade-ufpb-${semester}.png`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status('Imagem PNG gerada. Confira os downloads do navegador.');}
+ try{await document.fonts.ready;const canvas=GradeImage.render([...selected],semester);const blob=await new Promise((resolve,reject)=>canvas.toBlob(value=>value?resolve(value):reject(new Error()),'image/png'));const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`minha-grade-ufpb-${semester}.png`;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);status('Imagem PNG gerada. Confira os downloads do navegador.');}
  catch{status('Não foi possível gerar a imagem. Tente novamente.',true);}
  finally{button.disabled=!selected.length;}
 });

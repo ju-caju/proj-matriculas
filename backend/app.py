@@ -293,6 +293,17 @@ def create_app(
     def schedule_script() -> Response:
         return static_file("schedule.js", "text/javascript")
 
+    @app.get("/frontend/{filename}")
+    def frontend_script(filename: str) -> Response:
+        if filename not in {
+            "dom.js",
+            "plan-store.js",
+            "api-client.js",
+            "grade-image.js",
+        }:
+            return _error(404, "Arquivo não encontrado.")
+        return static_file("frontend/" + filename, "text/javascript")
+
     @app.get("/style.css")
     def stylesheet() -> Response:
         return static_file("style.css", "text/css")

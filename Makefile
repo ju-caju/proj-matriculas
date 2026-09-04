@@ -18,6 +18,8 @@ typecheck:
 test:
 	uv run python -m unittest discover -v
 	node schedule.test.js
+	node frontend/plan-store.test.js
+	node frontend/api-client.test.js
 
 coverage:
 	uv run coverage run -m unittest discover

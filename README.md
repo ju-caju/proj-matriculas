@@ -41,6 +41,21 @@ A grade é salva no armazenamento local deste navegador, por semestre (compartil
 
 A conversão usa a tabela publicada pela ACI/UFPB em https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/ e suporta múltiplos dias, turnos, horários descontínuos e intervalos de datas. N1 corresponde a 19:00–19:50; T6 a 17:30–18:20. Códigos desconhecidos não são posicionados silenciosamente. A grade representa a semana recorrente; intervalos de datas aparecem nos detalhes e são considerados na detecção de choques.
 
+### Organização do frontend
+
+O frontend continua sendo HTML, CSS e JavaScript puro. `app.js` coordena eventos e
+estado da tela; `schedule.js` concentra a conversão de horários e conflitos;
+`frontend/dom.js` reúne os construtores de elementos; `frontend/plan-store.js`
+mantém a grade no `localStorage` por semestre; `frontend/api-client.js` encapsula
+as chamadas JSON; e `frontend/grade-image.js` gera a exportação PNG sem enviar a
+grade ao servidor. Esses módulos não introduzem um framework de interface nem
+alteram o contrato visual da página.
+
+O teste `tests/test_browser.py` inicia um servidor HTTP falso e percorre login,
+unidades, consulta, montagem da grade e logout no Chrome. Ele é automaticamente
+ignorado quando o Chrome não está instalado e nunca usa credenciais reais ou
+acessa o SIGAA.
+
 ## Organização do backend
 
 O arquivo `server.py` inicia o FastAPI local com armazenamento em memória. O código do backend fica separado em:
