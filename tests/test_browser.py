@@ -64,6 +64,10 @@ class FakeBackend(http.server.BaseHTTPRequestHandler):
             "/frontend/dom.js": ("frontend/dom.js", "text/javascript"),
             "/frontend/plan-store.js": ("frontend/plan-store.js", "text/javascript"),
             "/frontend/api-client.js": ("frontend/api-client.js", "text/javascript"),
+            "/frontend/course-filter.js": (
+                "frontend/course-filter.js",
+                "text/javascript",
+            ),
             "/frontend/grade-image.js": ("frontend/grade-image.js", "text/javascript"),
             "/style.css": ("style.css", "text/css"),
         }
@@ -219,6 +223,7 @@ class BrowserFlowTest(unittest.TestCase):
                 "--headless",
                 "--no-sandbox",
                 "--disable-gpu",
+                "--disable-dev-shm-usage",
                 "--remote-debugging-port=0",
                 "--user-data-dir=" + profile.name,
                 "about:blank",
@@ -230,14 +235,22 @@ class BrowserFlowTest(unittest.TestCase):
         devtools = None
         try:
             browser_url = None
-            deadline = time.monotonic() + 10
+            chrome_errors = []
+            deadline = time.monotonic() + 30
             while time.monotonic() < deadline and browser_url is None:
                 ready, _, _ = select.select([chrome.stderr], [], [], 0.2)
                 if ready:
                     line = chrome.stderr.readline()
+                    chrome_errors.append(line.rstrip())
                     if "DevTools listening on " in line:
                         browser_url = line.split("DevTools listening on ", 1)[1].strip()
-            self.assertIsNotNone(browser_url, "Chrome não abriu o protocolo DevTools")
+                elif chrome.poll() is not None:
+                    break
+            self.assertIsNotNone(
+                browser_url,
+                "Chrome não abriu o protocolo DevTools:\n"
+                + "\n".join(chrome_errors[-20:]),
+            )
             browser = urllib.parse.urlparse(browser_url)
             with urllib.request.urlopen(
                 f"http://{browser.netloc}/json/list", timeout=5
@@ -301,6 +314,20 @@ class BrowserFlowTest(unittest.TestCase):
                     "(async()=>{for(let i=0;i<50&&!document.querySelector('#courses article');i++)await new Promise(r=>setTimeout(r,20));return !!document.querySelector('#courses article')})()",
                     True,
                 )
+            )
+            devtools.evaluate(
+                "document.querySelector('#shift-filter').value='evening'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "0 turmas disponíveis",
+                devtools.evaluate("document.querySelector('#count').textContent"),
+            )
+            devtools.evaluate(
+                "document.querySelector('#shift-filter').value='morning'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "1 turma disponível",
+                devtools.evaluate("document.querySelector('#count').textContent"),
             )
             devtools.evaluate(
                 "document.querySelector('#courses article button').click()"
