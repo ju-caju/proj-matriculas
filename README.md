@@ -89,7 +89,7 @@ O FastAPI de produção usa Redis REST para compartilhar o limite de cinco tenta
 de login por IP em quinze minutos e para guardar somente os cookies temporários do
 SIGAA, cifrados por 30 minutos após o último uso. Ele exige
 `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `SESSION_ENCRYPTION_KEY` e `VERCEL_URL`; sem qualquer uma
-dessas variáveis, o servidor seguro não inicia. Configure `PUBLIC_HOST` com o
+dessas variáveis, o servidor seguro não inicia. Configure `APP_HOST` com o
 domínio público estável, sem protocolo ou caminho. Gere a chave com
 `python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`.
 

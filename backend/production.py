@@ -33,7 +33,7 @@ def _production_dependencies(environment):
     configured_hosts = (
         deployment_host,
         environment.get("VERCEL_PROJECT_PRODUCTION_URL"),
-        environment.get("PUBLIC_HOST"),
+        environment.get("APP_HOST"),
     )
     for host in configured_hosts:
         if host is not None and not _is_trusted_host(host):
