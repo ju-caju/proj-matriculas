@@ -10,10 +10,9 @@ const api = ApiClient.createApi({ onUnauthorized: () => authenticated(false) }).
 function remove(key){selected=selected.filter(r=>S.key(r)!==key);save();render();status('Turma removida da grade.');}
 function add(key){const row=rows.find(r=>S.key(r)===key);if(!row||selected.some(r=>S.key(r)===key))return;if(row.periodo!==semester||S.parse(row.horario).errors.length){status('Confira o horário e o período desta turma.',true);return;}selected.push(row);save();render();const hits=S.conflicts(selected).filter(c=>S.key(c.a)===key||S.key(c.b)===key);status(hits.length?'Turma adicionada com choque. Confira os detalhes abaixo da grade.':'Turma adicionada: '+S.describe(row.horario),!!hits.length);}
 function renderCatalog(){
- const normalize=s=>s.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase(),term=normalize($('#filter').value);
- const visible=rows.filter(r=>normalize(Object.values(r).join(' ')).includes(term));
+ const visible=CourseFilter.filter(rows,$('#filter').value,$('#shift-filter').value,S);
  $('#count').textContent=`${visible.length} turma${visible.length===1?' disponível':'s disponíveis'}`;
- $('#empty').hidden=!!visible.length;$('#empty').textContent=busy?'Consultando turmas…':term?'Nenhuma turma corresponde à busca.':'Nenhuma turma encontrada nesta consulta.';
+ $('#empty').hidden=!!visible.length;$('#empty').textContent=busy?'Consultando turmas…':$('#filter').value||$('#shift-filter').value?'Nenhuma turma corresponde aos filtros.':'Nenhuma turma encontrada nesta consulta.';
  $('#courses').replaceChildren(...visible.map(row=>{
   const key=S.key(row),active=selected.some(r=>S.key(r)===key),parsed=S.parse(row.horario),card=el('article',undefined,'course '+color(row));
   card.draggable=!active&&!parsed.errors.length;card.classList.toggle('in-plan',active);
@@ -78,7 +77,7 @@ document.addEventListener('dragover',event=>{if(dragMode==='remove'&&!event.targ
 document.addEventListener('drop',event=>{if(dragMode==='remove'&&!event.target.closest('#calendar-drop')){event.preventDefault();const key=dragging;finishDrag();remove(key);}});
 $('#clear-plan').addEventListener('click',()=>{selected=[];save();render();status('Grade limpa. Adicione as turmas que quiser.');});
 $('#login-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#login-form button');button.disabled=true;status('Entrando no SIGAA…');try{await api('/api/login',Object.fromEntries(new FormData(event.target)));$('[name="password"]').value='';authenticated(true);await loadUnits();}catch(error){status(error.message,true);}finally{$('[name="password"]').value='';button.disabled=false;}});
-$('#query-form').addEventListener('submit',event=>{event.preventDefault();consult();});$('#filter').addEventListener('input',renderCatalog);
+$('#query-form').addEventListener('submit',event=>{event.preventDefault();consult();});$('#filter').addEventListener('input',renderCatalog);$('#shift-filter').addEventListener('change',renderCatalog);
 $('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{});authenticated(false);status('Você saiu. Sua grade permanece salva neste navegador.');}catch(error){status(error.message,true);}});
 api('/api/session').then(async result=>{authenticated(result.authenticated);if(result.authenticated)await loadUnits();else if(result.expired)status('Sua sessão expirou. Entre novamente.',true);}).catch(error=>status(error.message,true));
 

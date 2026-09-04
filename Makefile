@@ -20,6 +20,7 @@ test:
 	node schedule.test.js
 	node frontend/plan-store.test.js
 	node frontend/api-client.test.js
+	node frontend/course-filter.test.js
 
 coverage:
 	uv run coverage run -m unittest discover

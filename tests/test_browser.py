@@ -64,6 +64,10 @@ class FakeBackend(http.server.BaseHTTPRequestHandler):
             "/frontend/dom.js": ("frontend/dom.js", "text/javascript"),
             "/frontend/plan-store.js": ("frontend/plan-store.js", "text/javascript"),
             "/frontend/api-client.js": ("frontend/api-client.js", "text/javascript"),
+            "/frontend/course-filter.js": (
+                "frontend/course-filter.js",
+                "text/javascript",
+            ),
             "/frontend/grade-image.js": ("frontend/grade-image.js", "text/javascript"),
             "/style.css": ("style.css", "text/css"),
         }
@@ -301,6 +305,20 @@ class BrowserFlowTest(unittest.TestCase):
                     "(async()=>{for(let i=0;i<50&&!document.querySelector('#courses article');i++)await new Promise(r=>setTimeout(r,20));return !!document.querySelector('#courses article')})()",
                     True,
                 )
+            )
+            devtools.evaluate(
+                "document.querySelector('#shift-filter').value='evening'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "0 turmas disponíveis",
+                devtools.evaluate("document.querySelector('#count').textContent"),
+            )
+            devtools.evaluate(
+                "document.querySelector('#shift-filter').value='morning'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "1 turma disponível",
+                devtools.evaluate("document.querySelector('#count').textContent"),
             )
             devtools.evaluate(
                 "document.querySelector('#courses article button').click()"

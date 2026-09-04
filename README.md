@@ -63,7 +63,8 @@ O frontend continua sendo HTML, CSS e JavaScript puro. `app.js` coordena eventos
 estado da tela; `schedule.js` concentra a conversão de horários e conflitos;
 `frontend/dom.js` reúne os construtores de elementos; `frontend/plan-store.js`
 mantém a grade no `localStorage` por semestre; `frontend/api-client.js` encapsula
-as chamadas JSON; e `frontend/grade-image.js` gera a exportação PNG sem enviar a
+as chamadas JSON; `frontend/course-filter.js` combina a busca textual com o filtro
+de turno; e `frontend/grade-image.js` gera a exportação PNG sem enviar a
 grade ao servidor. Esses módulos não introduzem um framework de interface nem
 alteram o contrato visual da página.
 

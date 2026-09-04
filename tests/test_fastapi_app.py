@@ -117,6 +117,7 @@ class FastApiTest(unittest.TestCase):
             ("/frontend/dom.js", "text/javascript; charset=utf-8"),
             ("/frontend/plan-store.js", "text/javascript; charset=utf-8"),
             ("/frontend/api-client.js", "text/javascript; charset=utf-8"),
+            ("/frontend/course-filter.js", "text/javascript; charset=utf-8"),
             ("/frontend/grade-image.js", "text/javascript; charset=utf-8"),
             ("/style.css", "text/css; charset=utf-8"),
         ):
