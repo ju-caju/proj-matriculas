@@ -41,6 +41,33 @@ class PageParserTest(unittest.TestCase):
             page.rows,
         )
 
+    def test_ignores_scripts_and_actions_inside_result_markup(self):
+        page = SigaaPage(
+            """
+            <form>
+              <input name="javax.faces.ViewState" value="safe-state">
+              <input name="form:buttonBuscar" value="Buscar">
+              <select name="form:selectUnidade">
+                <option value="2151"><script>alert('x')</script>Centro seguro</option>
+              </select>
+              <table id="lista-turmas">
+                <tr class="destaque">
+                  <td><a href="javascript:acao()">DISCIPLINA SEGURA</a><script>acao()</script></td>
+                </tr>
+                <tr>
+                  <td>2026.2</td><td>01</td><td>DOCENTE</td><td>REGULAR</td>
+                  <td>Presencial</td><td>ABERTA</td><td>24M23</td><td>SALA</td>
+                  <td>10 vagas</td>
+                </tr>
+              </table>
+            </form>
+            """
+        )
+
+        self.assertEqual([{"value": "2151", "label": "Centro seguro"}], page.units)
+        self.assertEqual("DISCIPLINA SEGURA", page.rows[0]["disciplina"])
+        self.assertNotIn("javascript", repr(page.rows))
+
 
 if __name__ == "__main__":
     unittest.main()

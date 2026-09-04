@@ -13,6 +13,7 @@ from backend.sessions import MemorySessionStore
 class ControlledClient:
     def __init__(self, username="student"):
         self.username = username
+        self.query_calls = []
 
     def login(self, username, password):
         self.username = username
@@ -21,7 +22,35 @@ class ControlledClient:
         return [{"value": "1", "label": self.username}]
 
     def query(self, year, period, unit, discipline="", teacher=""):
+        self.query_calls.append((year, period, unit, discipline, teacher))
         return {"rows": [], "units": self.units()}
+
+
+class MalformedUnitsClient(ControlledClient):
+    def units(self):
+        return [{"value": 2151, "label": "Unidade"}]
+
+
+class UntrustedRowsClient(ControlledClient):
+    def query(self, year, period, unit, discipline="", teacher=""):
+        return {
+            "rows": [
+                {
+                    "disciplina": "CÁLCULO",
+                    "periodo": "2026.2",
+                    "turma": "01",
+                    "docente": "DOCENTE",
+                    "tipo": "REGULAR",
+                    "forma": "Presencial",
+                    "situacao": "ABERTA",
+                    "horario": "24M23",
+                    "local": "SALA",
+                    "vagas": "10 vagas",
+                    "script": "javascript:acao()",
+                }
+            ],
+            "units": self.units(),
+        }
 
 
 class FalseyLimiter:
@@ -113,6 +142,92 @@ class FastApiTest(unittest.TestCase):
         response = self.client.post("/api/units", json={})
         self.assertEqual(200, response.status_code)
         self.assertEqual({"units": [{"value": "1", "label": "alice"}]}, response.json())
+
+    def test_authenticated_units_query_and_logout_use_fastapi_contract(self):
+        login = self.client.post(
+            "/api/login", json={"username": "alice", "password": "secret"}
+        )
+        self.assertEqual(200, login.status_code)
+
+        response = self.client.post(
+            "/api/turmas",
+            json={
+                "year": "2026",
+                "period": "2",
+                "unit": "2151",
+                "discipline": " cálculo ",
+                "teacher": " docente ",
+            },
+        )
+        self.assertEqual(
+            {"rows": [], "units": [{"value": "1", "label": "alice"}]},
+            response.json(),
+        )
+        self.assertEqual(
+            [("2026", "2", "2151", "cálculo", "docente")],
+            self.clients[0].query_calls,
+        )
+
+        logout = self.client.post("/api/logout", json={})
+        self.assertEqual(200, logout.status_code)
+        self.assertEqual(401, self.client.post("/api/units", json={}).status_code)
+
+    def test_query_validation_happens_before_gateway_call(self):
+        self.client.post("/api/login", json={"username": "alice", "password": "secret"})
+
+        for payload in (
+            {"year": "20ab", "period": "2"},
+            {"year": "2026", "period": "9"},
+            {"year": "2026", "period": "2", "unit": "not-a-unit"},
+            {"year": "2026", "period": "2", "teacher": "x" * 61},
+        ):
+            with self.subTest(payload=payload):
+                response = self.client.post("/api/turmas", json=payload)
+                self.assertEqual(400, response.status_code)
+        self.assertEqual([], self.clients[0].query_calls)
+
+    def test_unexpected_unit_data_is_controlled_before_session_refresh(self):
+        sessions = MemorySessionStore(token_factory=lambda: "session-id")
+        app = create_app(client_factory=MalformedUnitsClient, sessions=sessions)
+        client = TestClient(app)
+        self.assertEqual(
+            200,
+            client.post(
+                "/api/login", json={"username": "alice", "password": "secret"}
+            ).status_code,
+        )
+        response = client.post("/api/units", json={})
+        self.assertEqual(400, response.status_code)
+        self.assertEqual(
+            {"error": "Dados inválidos ou resposta inesperada do SIGAA."},
+            response.json(),
+        )
+
+    def test_query_projection_does_not_expose_unexpected_fields(self):
+        sessions = MemorySessionStore(token_factory=lambda: "session-id")
+        app = create_app(client_factory=UntrustedRowsClient, sessions=sessions)
+        client = TestClient(app)
+        client.post("/api/login", json={"username": "alice", "password": "secret"})
+        response = client.post("/api/turmas", json={"year": "2026", "period": "2"})
+        self.assertEqual(200, response.status_code)
+        self.assertEqual(
+            [
+                {
+                    "disciplina": "CÁLCULO",
+                    "periodo": "2026.2",
+                    "turma": "01",
+                    "docente": "DOCENTE",
+                    "tipo": "REGULAR",
+                    "forma": "Presencial",
+                    "situacao": "ABERTA",
+                    "horario": "24M23",
+                    "local": "SALA",
+                    "vagas": "10 vagas",
+                }
+            ],
+            response.json()["rows"],
+        )
+        self.assertNotIn("script", response.text)
 
     def test_post_contract_rejects_non_json_and_keeps_security_headers(self):
         response = self.client.post("/api/logout", content="{}")

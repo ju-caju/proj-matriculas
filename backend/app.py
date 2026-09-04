@@ -7,7 +7,13 @@ from typing import Any, Callable
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from pydantic import BaseModel, ConfigDict, StrictStr
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictStr,
+    field_validator,
+)
 
 from .http import ROOT, SECURITY_HEADERS
 from .sessions import MemorySessionStore, SessionStore
@@ -38,8 +44,36 @@ class QueryRequest(BaseModel):
     year: StrictStr | None = None
     period: StrictStr | None = None
     unit: StrictStr | None = None
-    discipline: StrictStr | None = None
-    teacher: StrictStr | None = None
+    discipline: StrictStr | None = Field(default=None, max_length=60)
+    teacher: StrictStr | None = Field(default=None, max_length=60)
+
+    @field_validator("year")
+    @classmethod
+    def valid_year(cls, value: str | None) -> str | None:
+        if value is not None and not re.fullmatch(r"20\d{2}", value):
+            raise ValueError("ano inválido")
+        return value
+
+    @field_validator("period")
+    @classmethod
+    def valid_period(cls, value: str | None) -> str | None:
+        if value is not None and value not in ("0", "1", "2", "3", "4"):
+            raise ValueError("período inválido")
+        return value
+
+    @field_validator("unit")
+    @classmethod
+    def valid_unit(cls, value: str | None) -> str | None:
+        if value is not None and value and not value.isdigit():
+            raise ValueError("unidade inválida")
+        return value
+
+    @field_validator("discipline", "teacher", mode="before")
+    @classmethod
+    def normalize_filter(cls, value: Any) -> Any:
+        if isinstance(value, str):
+            value = value.strip()
+        return value
 
 
 class OkResponse(BaseModel):
@@ -53,6 +87,25 @@ class UnitResponse(BaseModel):
 
 class UnitsResponse(BaseModel):
     units: list[UnitResponse]
+
+
+class QueryResponse(BaseModel):
+    rows: list[dict[str, str]]
+    units: list[UnitResponse]
+
+
+CLASS_FIELDS = (
+    "disciplina",
+    "periodo",
+    "turma",
+    "docente",
+    "tipo",
+    "forma",
+    "situacao",
+    "horario",
+    "local",
+    "vagas",
+)
 
 
 def _error(status: int, message: str) -> JSONResponse:
@@ -78,6 +131,42 @@ def _body_is_too_large(request: Request) -> bool:
         return int(value) > MAX_JSON_BODY
     except ValueError:
         return True
+
+
+def _units_response(value: Any) -> UnitsResponse:
+    """Validate and project the SIGAA unit data to the public contract."""
+    if not isinstance(value, list):
+        raise ValueError("Unidades inválidas.")
+    units: list[UnitResponse] = []
+    for item in value:
+        if (
+            not isinstance(item, dict)
+            or not isinstance(item.get("value"), str)
+            or not isinstance(item.get("label"), str)
+        ):
+            raise ValueError("Unidades inválidas.")
+        units.append(UnitResponse(value=item["value"], label=item["label"]))
+    return UnitsResponse(units=units)
+
+
+def _query_response(value: Any) -> QueryResponse:
+    """Validate and project query results before they can reach the browser."""
+    if not isinstance(value, dict) or not isinstance(value.get("rows"), list):
+        raise ValueError("Turmas inválidas.")
+    rows = []
+    for item in value["rows"]:
+        if not isinstance(item, dict) or any(
+            field not in item for field in CLASS_FIELDS
+        ):
+            raise ValueError("Turmas inválidas.")
+        row = {}
+        for field in CLASS_FIELDS:
+            if not isinstance(item[field], str):
+                raise ValueError("Turmas inválidas.")
+            row[field] = item[field]
+        rows.append(row)
+    units = _units_response(value.get("units"))
+    return QueryResponse(rows=rows, units=units.units)
 
 
 def create_app(
@@ -232,14 +321,14 @@ def create_app(
                 if session_id:
                     raise PermissionError("Sua sessão expirou. Entre novamente.")
                 raise PermissionError("Entre para consultar as turmas.")
-            result = client.units()
+            result = _units_response(client.units())
             if not session_store.refresh(session_id):
                 raise PermissionError("Sua sessão expirou. Entre novamente.")
-            return UnitsResponse(units=result)
+            return result
         except Exception as exc:
             return _operation_error(exc)
 
-    @app.post("/api/turmas")
+    @app.post("/api/turmas", response_model=QueryResponse)
     def classes(request: Request, payload: QueryRequest):
         try:
             session_id, client = session(request, refresh=False)
@@ -254,14 +343,11 @@ def create_app(
                 str(getattr(payload, key) or "").strip()
                 for key in ("discipline", "teacher")
             )
-            if (
-                not re.fullmatch(r"20\d{2}", year)
-                or period not in ("0", "1", "2", "3", "4")
-                or (unit and not unit.isdigit())
-                or max(len(discipline), len(teacher)) > 60
-            ):
+            if not year or not period:
                 raise ValueError("Confira ano, período e unidade.")
-            result = client.query(year, period, unit, discipline, teacher)
+            result = _query_response(
+                client.query(year, period, unit, discipline, teacher)
+            )
             if not session_store.refresh(session_id):
                 raise PermissionError("Sua sessão expirou. Entre novamente.")
             return result

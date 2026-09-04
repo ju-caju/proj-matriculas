@@ -5,6 +5,8 @@ from html.parser import HTMLParser
 class SigaaPage(HTMLParser):
     """Extrai os campos dos formulários e resultados usados pelo planejador."""
 
+    _ignored_tags = frozenset(("script", "style", "template", "noscript"))
+
     def __init__(self, html):
         super().__init__()
         self.inputs = {}
@@ -16,9 +18,15 @@ class SigaaPage(HTMLParser):
         self.row = None
         self.cell = None
         self.subject = ""
+        self._ignored_depth = 0
         self.feed(html)
 
     def handle_starttag(self, tag, attrs):
+        if tag in self._ignored_tags:
+            self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
         attributes = dict(attrs)
         if tag == "input" and attributes.get("name"):
             self.inputs[attributes["name"]] = attributes.get("value", "")
@@ -34,12 +42,18 @@ class SigaaPage(HTMLParser):
             self.cell = ""
 
     def handle_data(self, data):
+        if self._ignored_depth:
+            return
         if self.option is not None:
             self.option[1] += data
         if self.cell is not None:
             self.cell += " " + data
 
     def handle_endtag(self, tag):
+        if self._ignored_depth:
+            if tag in self._ignored_tags:
+                self._ignored_depth -= 1
+            return
         if tag == "option" and self.option is not None:
             self.units.append(
                 {"value": self.option[0], "label": self.option[1].strip()}
