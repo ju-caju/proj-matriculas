@@ -1,14 +1,11 @@
-import http.client
-import json
-import threading
 import unittest
-from http.server import HTTPServer
 from unittest.mock import patch
 
 from cryptography.fernet import Fernet
+from fastapi.testclient import TestClient
 
-from backend.http import make_handler
-from backend.production import make_production_handler
+from backend.app import create_app
+from backend.production import make_production_app
 from backend.sessions import EncryptedRedisSessionStore, RedisRateLimiter
 
 
@@ -77,46 +74,37 @@ class SecureApiTest(unittest.TestCase):
             token_factory=lambda: "random-session-a",
         )
         self.limiter = RedisRateLimiter(self.redis)
-        handler = make_handler(
-            SerializableSigaa,
-            self.sessions,
-            login_limiter=self.limiter,
-            client_ip=lambda request: request.headers.get("X-Platform-IP"),
-            secure_cookie=True,
-            cookie_path="/api",
+        self.client = TestClient(
+            create_app(
+                client_factory=SerializableSigaa,
+                sessions=self.sessions,
+                login_limiter=self.limiter,
+                client_ip=lambda request: request.headers.get("X-Platform-IP"),
+                secure_cookie=True,
+                cookie_path="/api",
+            ),
+            base_url="https://127.0.0.1:8765",
         )
-        self.server = HTTPServer(("127.0.0.1", 0), handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        self.cookie = None
 
     def tearDown(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join()
+        self.client.close()
 
     def request(self, path, body=None, ip="203.0.113.10", cookie=True):
-        connection = http.client.HTTPConnection(*self.server.server_address)
         headers = {
-            "Host": "127.0.0.1:8765",
-            "Origin": "http://127.0.0.1:8765",
+            "host": "127.0.0.1:8765",
+            "origin": "http://127.0.0.1:8765",
             "Content-Type": "application/json",
         }
         if ip is not None:
-            headers["X-Platform-IP"] = ip
-        if cookie and self.cookie:
-            headers["Cookie"] = self.cookie
-        connection.request("POST", path, json.dumps(body or {}), headers)
-        response = connection.getresponse()
-        result = (
-            response.status,
-            json.loads(response.read()),
-            response.getheader("Set-Cookie"),
+            headers["x-platform-ip"] = ip
+        if not cookie:
+            self.client.cookies.clear()
+        response = self.client.post(path, json=body or {}, headers=headers)
+        return (
+            response.status_code,
+            response.json(),
+            response.headers.get("set-cookie"),
         )
-        if result[2]:
-            self.cookie = result[2].split(";", 1)[0]
-        connection.close()
-        return result
 
     def login(self, username="student", **kwargs):
         return self.request(
@@ -162,21 +150,21 @@ class SecureApiTest(unittest.TestCase):
         identifiers = iter(("session-a", "session-b"))
         self.sessions.token_factory = lambda: next(identifiers)
         self.assertEqual(200, self.login(username="alice")[0])
-        cookie_a = self.cookie
+        cookie_a = self.client.cookies.get("session")
         self.assertEqual(
             200, self.login(username="bob", cookie=False, ip="203.0.113.11")[0]
         )
-        cookie_b = self.cookie
+        cookie_b = self.client.cookies.get("session")
 
         self.assertNotEqual(cookie_a, cookie_b)
         self.assertIn("session:session-a", self.redis.values)
         self.assertIn("session:session-b", self.redis.values)
-        self.cookie = cookie_a
+        self.client.cookies.set("session", cookie_a)
         self.assertEqual(
             "alice-temporary-secret",
             self.request("/api/units")[1]["units"][0]["label"],
         )
-        self.cookie = cookie_b
+        self.client.cookies.set("session", cookie_b)
         self.assertEqual(
             "bob-temporary-secret",
             self.request("/api/units")[1]["units"][0]["label"],
@@ -224,18 +212,28 @@ class SecureApiTest(unittest.TestCase):
 
     def test_production_requires_redis_and_encryption_configuration(self):
         with self.assertRaisesRegex(ValueError, "Redis"):
-            make_production_handler({})
+            make_production_app({})
 
         with self.assertRaisesRegex(ValueError, "criptografia"):
-            make_production_handler(
+            make_production_app(
                 {
                     "KV_REST_API_URL": "https://redis.example",
                     "KV_REST_API_TOKEN": "token",
                 }
             )
 
+        with self.assertRaisesRegex(ValueError, "Domínio"):
+            make_production_app(
+                {
+                    "KV_REST_API_URL": "https://redis.example",
+                    "KV_REST_API_TOKEN": "token",
+                    "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+                    "VERCEL_URL": "https://not-a-host.example/path",
+                }
+            )
+
     def test_production_accepts_stable_project_domain(self):
-        handler = make_production_handler(
+        app = make_production_app(
             {
                 "KV_REST_API_URL": "https://redis.invalid",
                 "KV_REST_API_TOKEN": "token",
@@ -244,32 +242,21 @@ class SecureApiTest(unittest.TestCase):
                 "VERCEL_PROJECT_PRODUCTION_URL": "proj-matriculas.vercel.app",
             }
         )
-        server = HTTPServer(("127.0.0.1", 0), handler)
-        thread = threading.Thread(target=server.handle_request, daemon=True)
-        thread.start()
         with patch(
             "backend.sessions.RedisRestClient.execute",
             side_effect=ConnectionError("redis unavailable"),
         ):
-            connection = http.client.HTTPConnection(*server.server_address)
-            connection.request(
-                "POST",
+            response = TestClient(app).post(
                 "/api/login",
-                json.dumps({"username": "student", "password": "password"}),
+                json={"username": "student", "password": "password"},
                 headers={
-                    "Host": "proj-matriculas.vercel.app",
-                    "Origin": "https://proj-matriculas.vercel.app",
-                    "Content-Type": "application/json",
-                    "X-Vercel-Forwarded-For": "203.0.113.10",
+                    "host": "proj-matriculas.vercel.app",
+                    "origin": "https://proj-matriculas.vercel.app",
+                    "x-vercel-forwarded-for": "203.0.113.10",
                 },
             )
-            response = connection.getresponse()
-            response.read()
-            connection.close()
-            thread.join()
-        server.server_close()
 
-        self.assertEqual(503, response.status)
+        self.assertEqual(503, response.status_code)
 
 
 if __name__ == "__main__":

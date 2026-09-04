@@ -27,7 +27,7 @@ de runtime, mas o fluxo suportado é `uv sync --locked`.
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 
-O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor local escuta apenas no computador. A versão pública usa o adaptador de produção descrito abaixo.
+O servidor obtém o ViewState de cada formulário e mantém os cookies do SIGAA na memória, separados por sessão. A senha não é salva. As sessões locais expiram após 30 minutos de inatividade; sair descarta a sessão local. O servidor local escuta apenas no computador. A versão pública usa a configuração de produção do FastAPI descrita abaixo.
 
 Filtros iniciais: graduação, 2026.2, unidade 2151, com os demais campos da consulta capturada. A lista de unidades vem do SIGAA. Busca por texto filtra os resultados já carregados. O retorno HTML do SIGAA é convertido em dados; scripts e links de ação do portal não são executados.
 
@@ -43,18 +43,18 @@ A conversão usa a tabela publicada pela ACI/UFPB em https://www.ufpb.br/aci/alt
 
 ## Organização do backend
 
-O arquivo `server.py` apenas monta o servidor local. O código do backend fica separado em:
+O arquivo `server.py` inicia o FastAPI local com armazenamento em memória. O código do backend fica separado em:
 
-- `backend/http.py`: endpoints, validação das requisições e arquivos estáticos;
+- `backend/app.py`: endpoints FastAPI, validação das requisições e arquivos estáticos;
 - `backend/sessions.py`: contrato de armazenamento e implementação local em memória;
 - `backend/sigaa.py`: protocolo de login e consulta, com transporte HTTP substituível;
 - `backend/parser.py`: leitura dos formulários, unidades e turmas retornados pelo SIGAA.
 
-Essa separação permite testar a API e o parser sem credenciais e sem acessar o SIGAA real.
+Essa separação permite testar a API e o parser sem credenciais e sem acessar o SIGAA real. O arquivo `api/index.py` é o único entrypoint publicado pela Vercel; o `vercel.json` encaminha tanto a interface quanto a API para a mesma aplicação ASGI.
 
 ## Sessões em produção
 
-O adaptador de produção usa Redis REST para compartilhar o limite de cinco tentativas
+O FastAPI de produção usa Redis REST para compartilhar o limite de cinco tentativas
 de login por IP em quinze minutos e para guardar somente os cookies temporários do
 SIGAA, cifrados por 30 minutos após o último uso. Ele exige
 `KV_REST_API_URL`, `KV_REST_API_TOKEN`, `SESSION_ENCRYPTION_KEY` e `VERCEL_URL`; sem qualquer uma
@@ -79,8 +79,9 @@ Os testes Python usam páginas HTML sanitizadas e implementações controladas d
 
 ## Prévia na Vercel
 
-O projeto usa os arquivos estáticos da raiz sem framework de frontend. Cada arquivo
-em `api/` publica um endpoint Python na mesma origem. O `vercel.json` aplica CSP,
+O projeto usa os arquivos estáticos da raiz sem framework de frontend. O entrypoint
+`api/index.py` publica a aplicação FastAPI na mesma origem, e o `vercel.json` encaminha
+as rotas para ela. O `vercel.json` aplica CSP,
 `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` também aos arquivos
 estáticos.
 

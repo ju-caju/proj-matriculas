@@ -1,4 +1,4 @@
-"""FastAPI application used during the HTTP adapter expansion."""
+"""FastAPI application for the local and Vercel runtimes."""
 
 import re
 from pathlib import Path
@@ -15,11 +15,12 @@ from pydantic import (
     field_validator,
 )
 
-from .http import ROOT, SECURITY_HEADERS
 from .sessions import MemorySessionStore, SessionStore
 from .sigaa import Sigaa, SigaaClient
+from .web import ROOT, SECURITY_HEADERS
 
 MAX_JSON_BODY = 8192
+CONFIGURATION_ERROR = {"error": "Serviço temporariamente indisponível."}
 
 
 class HealthResponse(BaseModel):
@@ -110,6 +111,34 @@ CLASS_FIELDS = (
 
 def _error(status: int, message: str) -> JSONResponse:
     return JSONResponse(status_code=status, content={"error": message})
+
+
+def unavailable_app() -> FastAPI:
+    """Return a closed-by-default app for an invalid production configuration.
+
+    Vercel imports the module before it can serve a request.  Keeping an ASGI
+    object available lets that import succeed while every request remains a
+    generic 503, without accidentally falling back to local in-memory state.
+    """
+
+    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        for key, value in SECURITY_HEADERS:
+            response.headers[key] = value
+        return response
+
+    @app.api_route(
+        "/{path:path}",
+        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    )
+    def unavailable() -> JSONResponse:
+        return JSONResponse(status_code=503, content=CONFIGURATION_ERROR)
+
+    return app
 
 
 def _operation_error(exc: Exception) -> JSONResponse:

@@ -5,7 +5,7 @@ from cryptography.fernet import Fernet
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from backend.app import create_app
+from backend.app import create_app, unavailable_app
 from backend.production import make_production_app
 from backend.sessions import MemorySessionStore
 
@@ -98,6 +98,16 @@ class FastApiTest(unittest.TestCase):
         self.assertEqual({"status": "ok"}, response.json())
         self.assertEqual("no-store", response.headers["cache-control"])
         self.assertEqual("nosniff", response.headers["x-content-type-options"])
+
+    def test_unavailable_app_fails_closed_without_falling_back_to_memory(self):
+        response = TestClient(unavailable_app()).get("/")
+
+        self.assertEqual(503, response.status_code)
+        self.assertEqual(
+            {"error": "Serviço temporariamente indisponível."}, response.json()
+        )
+        self.assertEqual("no-store", response.headers["cache-control"])
+        self.assertEqual("DENY", response.headers["x-frame-options"])
 
     def test_page_and_static_files_are_served_from_same_app(self):
         for path, content_type in (
@@ -249,6 +259,33 @@ class FastApiTest(unittest.TestCase):
         self.assertIsInstance(app, FastAPI)
         self.assertIn("/api/login", {route.path for route in app.routes})
         self.assertIn("/api/logout", {route.path for route in app.routes})
+
+    def test_production_startup_uses_fastapi_and_controlled_redis(self):
+        environment = {
+            "KV_REST_API_URL": "https://redis.example",
+            "KV_REST_API_TOKEN": "token",
+            "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+            "VERCEL_URL": "preview.example.vercel.app",
+        }
+        with patch(
+            "backend.sessions.RedisRestClient.execute",
+            side_effect=ConnectionError("redis unavailable"),
+        ):
+            client = TestClient(make_production_app(environment))
+            response = client.post(
+                "/api/login",
+                json={"username": "student", "password": "password"},
+                headers={
+                    "host": "preview.example.vercel.app",
+                    "origin": "https://preview.example.vercel.app",
+                    "x-vercel-forwarded-for": "203.0.113.10",
+                },
+            )
+
+        self.assertEqual(503, response.status_code)
+        self.assertEqual(
+            {"error": "Serviço temporariamente indisponível."}, response.json()
+        )
 
     def test_login_uses_a_configured_limiter_even_when_it_is_falsey(self):
         limiter = FalseyLimiter()

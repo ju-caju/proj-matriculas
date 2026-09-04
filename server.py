@@ -1,14 +1,8 @@
-"""Aplicação local, sem dependências externas. Execute: python3 server.py."""
+"""Local ASGI runner for the FastAPI application."""
 
-from http.server import HTTPServer
+import uvicorn
 
-from backend.http import make_handler
-from backend.sessions import MemorySessionStore
-from backend.sigaa import Sigaa
-
-Handler = make_handler(Sigaa, MemorySessionStore())
-
+from backend.app import app
 
 if __name__ == "__main__":
-    print("Aplicação disponível em http://127.0.0.1:8765", flush=True)
-    HTTPServer(("127.0.0.1", 8765), Handler).serve_forever()
+    uvicorn.run(app, host="127.0.0.1", port=8765)

@@ -1,10 +1,8 @@
-import http.client
-import json
-import threading
 import unittest
-from http.server import HTTPServer
 
-from backend.http import make_handler
+from fastapi.testclient import TestClient
+
+from backend.app import create_app
 
 
 class ControlledSigaa:
@@ -30,7 +28,20 @@ class ControlledSigaa:
         if self.query_error:
             raise self.query_error
         return {
-            "rows": [{"disciplina": "CÁLCULO", "periodo": "2026.2"}],
+            "rows": [
+                {
+                    "disciplina": "CÁLCULO",
+                    "periodo": "2026.2",
+                    "turma": "01",
+                    "docente": "DOCENTE",
+                    "tipo": "REGULAR",
+                    "forma": "Presencial",
+                    "situacao": "ABERTA",
+                    "horario": "24M23",
+                    "local": "SALA",
+                    "vagas": "10 vagas",
+                }
+            ],
             "units": self.units(),
         }
 
@@ -69,34 +80,16 @@ class ApiTest(unittest.TestCase):
             self.clients.append(client)
             return client
 
-        handler = make_handler(factory, self.store)
-        self.server = HTTPServer(("127.0.0.1", 0), handler)
-        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-        self.thread.start()
-        self.cookie = None
+        self.client = TestClient(
+            create_app(client_factory=factory, sessions=self.store)
+        )
 
     def tearDown(self):
-        self.server.shutdown()
-        self.server.server_close()
-        self.thread.join()
+        self.client.close()
 
     def request(self, method, path, body=None):
-        connection = http.client.HTTPConnection(*self.server.server_address)
-        headers = {"Host": "127.0.0.1:8765", "Origin": "http://127.0.0.1:8765"}
-        payload = None
-        if body is not None:
-            payload = json.dumps(body)
-            headers["Content-Type"] = "application/json"
-        if self.cookie:
-            headers["Cookie"] = self.cookie
-        connection.request(method, path, payload, headers)
-        response = connection.getresponse()
-        data = json.loads(response.read())
-        set_cookie = response.getheader("Set-Cookie")
-        if set_cookie:
-            self.cookie = set_cookie.split(";", 1)[0]
-        connection.close()
-        return response.status, data, set_cookie
+        response = self.client.request(method, path, json=body)
+        return response.status_code, response.json(), response.headers.get("set-cookie")
 
     def login(self):
         status, body, cookie = self.request(
@@ -145,7 +138,7 @@ class ApiTest(unittest.TestCase):
             (200, {"ok": True}), self.request("POST", "/api/logout", {})[:2]
         )
         self.assertEqual(
-            (200, {"authenticated": False, "expired": True}),
+            (200, {"authenticated": False, "expired": False}),
             self.request("GET", "/api/session")[:2],
         )
 

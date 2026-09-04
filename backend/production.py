@@ -1,7 +1,8 @@
 import ipaddress
 import os
+import re
 
-from .http import make_handler
+from .app import create_app
 from .sessions import EncryptedRedisSessionStore, RedisRateLimiter, RedisRestClient
 from .sigaa import Sigaa
 
@@ -29,6 +30,12 @@ def _production_dependencies(environment):
     deployment_host = environment.get("VERCEL_URL")
     if not deployment_host:
         raise ValueError("Domínio da Vercel ausente.")
+    for host in (
+        deployment_host,
+        environment.get("VERCEL_PROJECT_PRODUCTION_URL"),
+    ):
+        if host is not None and not _is_trusted_host(host):
+            raise ValueError("Domínio da Vercel inválido.")
     hosts = tuple(
         dict.fromkeys(
             host
@@ -42,24 +49,21 @@ def _production_dependencies(environment):
     return redis, sessions, hosts
 
 
-def make_production_handler(environment=None):
-    redis, sessions, hosts = _production_dependencies(environment)
-    return make_handler(
-        Sigaa,
-        sessions,
-        login_limiter=RedisRateLimiter(redis),
-        client_ip=vercel_client_ip,
-        secure_cookie=True,
-        cookie_path="/api",
-        valid_hosts=hosts,
-        valid_origins=(None, *("https://" + host for host in hosts)),
+def _is_trusted_host(value):
+    """Accept only a DNS host, never a URL, port, or header fragment."""
+    if not isinstance(value, str) or len(value) > 253:
+        return False
+    labels = value.rstrip(".").split(".")
+    return bool(labels) and all(
+        label
+        and len(label) <= 63
+        and re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?", label)
+        for label in labels
     )
 
 
 def make_production_app(environment=None):
     """Build the FastAPI application with the production dependencies."""
-    from .app import create_app
-
     redis, sessions, hosts = _production_dependencies(environment)
     return create_app(
         client_factory=Sigaa,
