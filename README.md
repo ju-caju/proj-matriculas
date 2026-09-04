@@ -117,6 +117,23 @@ as rotas para ela. O `vercel.json` aplica CSP,
 `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` também aos arquivos
 estáticos.
 
+### Ambiente de desenvolvimento com dados simulados
+
+Para entregar uma prévia a alguém sem acesso ao SIGAA, crie uma branch, por exemplo
+`demo`, e configure `APP_MODE=demo` somente no ambiente **Preview** da Vercel. Não
+configure Redis, chave Fernet nem credenciais do SIGAA nesse ambiente. Faça um novo
+deploy da branch e entre com:
+
+```text
+Usuário: demo
+Senha: demo
+```
+
+Esse modo não faz requisições ao SIGAA. Ele usa turmas sintéticas, aceita os mesmos
+filtros da aplicação e mantém a sessão em um cookie sem dados pessoais. A aplicação
+recusa iniciar o modo demo quando `VERCEL_ENV=production`. Na configuração da
+variável na Vercel, selecione apenas **Preview** e deixe **Production** desmarcado.
+
 1. Importe o repositório na Vercel em um projeto no plano Hobby.
 2. Conecte um banco Upstash Redis no plano gratuito. A integração deve criar
    `KV_REST_API_URL` e `KV_REST_API_TOKEN` nos ambientes de prévia.

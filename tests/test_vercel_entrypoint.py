@@ -58,6 +58,43 @@ class VercelEntrypointTest(unittest.TestCase):
             response.headers["Content-Security-Policy"],
         )
 
+    def test_demo_preview_uses_the_simulated_backend(self):
+        spec = importlib.util.spec_from_file_location("vercel_demo", ENTRYPOINT)
+        module = importlib.util.module_from_spec(spec)
+        environment = {
+            "APP_MODE": "demo",
+            "VERCEL_ENV": "preview",
+            "VERCEL_URL": "demo.example.vercel.app",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            spec.loader.exec_module(module)
+
+        response = TestClient(module.app).post(
+            "/api/login",
+            json={"username": "demo", "password": "demo"},
+            headers={
+                "host": "demo.example.vercel.app",
+                "origin": "https://demo.example.vercel.app",
+            },
+        )
+
+        self.assertEqual(200, response.status_code)
+
+    def test_demo_mode_fails_closed_in_a_production_deployment(self):
+        spec = importlib.util.spec_from_file_location("vercel_demo_prod", ENTRYPOINT)
+        module = importlib.util.module_from_spec(spec)
+        environment = {
+            "APP_MODE": "demo",
+            "VERCEL_ENV": "production",
+            "VERCEL_URL": "prod.example.vercel.app",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            spec.loader.exec_module(module)
+
+        response = TestClient(module.app).get("/api/session")
+
+        self.assertEqual(503, response.status_code)
+
 
 if __name__ == "__main__":
     unittest.main()
