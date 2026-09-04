@@ -1,0 +1,9 @@
+services:
+  app:
+    build:
+      context: .
+    image: turmas-ufpb:local
+    ports:
+      - "8765:8765"
+    init: true
+    restart: "no"

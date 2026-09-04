@@ -30,6 +30,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --locked
 
+      - name: Audit locked dependencies
+        run: make audit
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Check formatting
         run: make format-check
 
@@ -41,6 +49,24 @@ jobs:
 
       - name: Run tests
         run: make test
+
+      - name: Start local server for smoke test
+        run: |
+          uv run uvicorn server:app --host 127.0.0.1 --port 8765 > /tmp/matriculas-server.log 2>&1 &
+          echo $! > /tmp/matriculas-server.pid
+          for attempt in {1..20}; do
+            if curl --fail --silent http://127.0.0.1:8765/health >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/matriculas-server.log
+          exit 1
+
+      - name: Run local smoke test
+        run: make smoke-test
+
+      - name: Stop local server
+        if: ${{ always() }}
+        run: test ! -f /tmp/matriculas-server.pid || kill "$(cat /tmp/matriculas-server.pid)"
 
       - name: Measure Python coverage
         run: make coverage

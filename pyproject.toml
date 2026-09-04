@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Consulta de turmas de graduação da UFPB"
 requires-python = ">=3.12,<3.13"
 dependencies = [
-    "cryptography==41.0.7",
+    "cryptography>=50,<51",
     "fastapi>=0.115,<1",
     "uvicorn>=0.30,<1",
 ]

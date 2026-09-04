@@ -1,0 +1,15 @@
+.git
+.github
+.venv
+.mypy_cache
+.ruff_cache
+__pycache__
+.coverage
+*.py[cod]
+tests
+*.har
+.env
+.env.*
+README.md
+ESPECIFICACAO-VERCEL.md
+MODELO-DE-AMEACAS.md

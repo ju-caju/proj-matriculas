@@ -32,6 +32,11 @@ class VercelEntrypointTest(unittest.TestCase):
             config["rewrites"],
         )
 
+    def test_vercel_git_integration_keeps_preview_deployments_enabled(self):
+        config = json.loads(VERCEL_CONFIG.read_text())
+
+        self.assertTrue(config["git"]["deploymentEnabled"])
+
     def test_missing_configuration_fails_closed_with_generic_response(self):
         spec = importlib.util.spec_from_file_location("vercel_entrypoint", ENTRYPOINT)
         module = importlib.util.module_from_spec(spec)

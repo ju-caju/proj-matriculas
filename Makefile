@@ -1,4 +1,4 @@
-.PHONY: install format format-check lint typecheck test coverage check
+.PHONY: install format format-check lint typecheck test coverage audit smoke-test check
 
 install:
 	uv sync --locked
@@ -25,4 +25,10 @@ coverage:
 	uv run coverage run -m unittest discover
 	uv run coverage report
 
-check: format-check lint typecheck test coverage
+audit:
+	uv export --locked --no-dev --format requirements.txt | uvx --from pip-audit pip-audit --strict -r /dev/stdin
+
+smoke-test:
+	uv run python scripts/smoke_test.py
+
+check: format-check lint typecheck test coverage audit
