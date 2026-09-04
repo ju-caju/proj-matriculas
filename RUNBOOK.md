@@ -45,6 +45,7 @@ as variáveis abaixo separadamente das de produção:
 | `KV_REST_API_TOKEN` | token do banco de prévia | token do banco de produção |
 | `SESSION_ENCRYPTION_KEY` | chave Fernet exclusiva de prévia | chave Fernet exclusiva de produção |
 | `VERCEL_URL` | fornecida pela Vercel | fornecida pela Vercel |
+| `PUBLIC_HOST` | domínio público da prévia, se houver | domínio público estável, sem protocolo |
 
 Marque os três primeiros valores como secrets e não os copie para arquivos,
 logs, comentários ou fixtures. O Redis e a chave não devem ser reutilizados

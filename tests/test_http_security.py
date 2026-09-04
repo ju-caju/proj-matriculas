@@ -248,7 +248,7 @@ class SecureApiTest(unittest.TestCase):
                 "KV_REST_API_TOKEN": "token",
                 "SESSION_ENCRYPTION_KEY": Fernet.generate_key().decode(),
                 "VERCEL_URL": "proj-matriculas-random.vercel.app",
-                "VERCEL_PROJECT_PRODUCTION_URL": "proj-matriculas.vercel.app",
+                "PUBLIC_HOST": "proj-matriculas.vercel.app",
             }
         )
         with patch(

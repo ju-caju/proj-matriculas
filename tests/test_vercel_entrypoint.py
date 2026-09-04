@@ -26,6 +26,7 @@ class VercelEntrypointTest(unittest.TestCase):
     def test_vercel_routes_all_paths_to_the_fastapi_entrypoint(self):
         config = json.loads(VERCEL_CONFIG.read_text())
 
+        self.assertEqual("fastapi", config["framework"])
         self.assertEqual({"api/index.py"}, set(config["functions"]))
         self.assertEqual(
             [{"source": "/(.*)", "destination": "/api/index.py"}],

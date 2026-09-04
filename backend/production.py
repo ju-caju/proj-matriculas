@@ -30,22 +30,15 @@ def _production_dependencies(environment):
     deployment_host = environment.get("VERCEL_URL")
     if not deployment_host:
         raise ValueError("Domínio da Vercel ausente.")
-    for host in (
+    configured_hosts = (
         deployment_host,
         environment.get("VERCEL_PROJECT_PRODUCTION_URL"),
-    ):
+        environment.get("PUBLIC_HOST"),
+    )
+    for host in configured_hosts:
         if host is not None and not _is_trusted_host(host):
             raise ValueError("Domínio da Vercel inválido.")
-    hosts = tuple(
-        dict.fromkeys(
-            host
-            for host in (
-                deployment_host,
-                environment.get("VERCEL_PROJECT_PRODUCTION_URL"),
-            )
-            if host
-        )
-    )
+    hosts = tuple(dict.fromkeys(host for host in configured_hosts if host))
     return redis, sessions, hosts
 
 
