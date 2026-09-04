@@ -155,7 +155,7 @@ IP.
 
 A produção está em https://proj-matriculas.vercel.app. O projeto Vercel usa o plano
 Hobby, o preset `Other` e a raiz do repositório. A branch `main` do repositório
-privado `ju-caju/proj-matriculas` dispara os deploys de produção.
+público `ju-caju/proj-matriculas` dispara os deploys de produção.
 
 Para reproduzir a configuração:
 
