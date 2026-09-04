@@ -18,7 +18,6 @@ class StaticValidationTest(unittest.TestCase):
             json.dumps(
                 {
                     "functions": {"api/index.py": {}},
-                    "rewrites": [{"source": "/(.*)", "destination": "/api/index.py"}],
                 }
             ),
             encoding="utf-8",

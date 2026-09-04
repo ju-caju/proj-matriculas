@@ -9,12 +9,6 @@
       "excludeFiles": "{tests/**,scripts/**,**/__pycache__/**,*.md}"
     }
   },
-  "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/api/index.py"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

@@ -37,8 +37,8 @@ def validate(root: Path = ROOT) -> None:
     config = json.loads((root / "vercel.json").read_text(encoding="utf-8"))
     if set(config.get("functions", {})) != {"api/index.py"}:
         raise AssertionError("api/index.py deve ser o único entrypoint Vercel")
-    if config.get("rewrites") != [{"source": "/(.*)", "destination": "/api/index.py"}]:
-        raise AssertionError("rewrite Vercel inesperado")
+    if "rewrites" in config:
+        raise AssertionError("o preset FastAPI não deve reescrever as rotas")
 
 
 if __name__ == "__main__":

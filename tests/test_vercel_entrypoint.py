@@ -32,10 +32,7 @@ class VercelEntrypointTest(unittest.TestCase):
         self.assertEqual("fastapi", config["framework"])
         self.assertEqual("api.index:app", project["tool"]["vercel"]["entrypoint"])
         self.assertEqual({"api/index.py"}, set(config["functions"]))
-        self.assertEqual(
-            [{"source": "/(.*)", "destination": "/api/index.py"}],
-            config["rewrites"],
-        )
+        self.assertNotIn("rewrites", config)
 
     def test_vercel_git_integration_keeps_preview_deployments_enabled(self):
         config = json.loads(VERCEL_CONFIG.read_text())
