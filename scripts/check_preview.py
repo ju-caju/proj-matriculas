@@ -6,7 +6,6 @@ from urllib.error import HTTPError
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
-
 SECURITY_HEADERS = {
     "Content-Security-Policy": (
         "default-src 'self'; script-src 'self'; style-src 'self'; "
@@ -55,7 +54,10 @@ def require_security_headers(response, path):
 
 
 def require_json_response(response, status, body, label):
-    require(response.status == status, f"{label}: esperado {status}, recebido {response.status}")
+    require(
+        response.status == status,
+        f"{label}: esperado {status}, recebido {response.status}",
+    )
     require(
         response.headers.get_content_type() == "application/json",
         f"{label}: Content-Type não é application/json",

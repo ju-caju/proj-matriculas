@@ -1,8 +1,29 @@
 # Turmas UFPB
 
 Aplicação independente para entrar no SIGAA e consultar turmas de graduação. HTML,
-CSS e JavaScript, com servidor Python 3. Instale a dependência criptográfica com
-`python3 -m pip install -r requirements.txt`.
+CSS e JavaScript, com servidor Python 3. As dependências são gerenciadas com `uv`
+e ficam travadas em `uv.lock`.
+
+## Desenvolvimento reproduzível
+
+Instale o [uv](https://docs.astral.sh/uv/) e execute:
+
+```sh
+make install
+make check
+```
+
+`make check` reproduz todas as verificações do CI: formatação (`make format-check`),
+lint (`make lint`), tipos (`make typecheck`), os 28 testes Python e os testes
+JavaScript (`make test`) e cobertura Python (`make coverage`). Para formatar os
+arquivos localmente, use `make format`.
+
+Os testes usam somente fixtures HTML sanitizadas e implementações controladas.
+Eles não precisam de Redis, Vercel ou acesso ao SIGAA. As regras obrigatórias
+para contribuições estão em `AGENTS.md`.
+
+Para instalações manuais legadas, `requirements.txt` ainda lista a dependência
+de runtime, mas o fluxo suportado é `uv sync --locked`.
 
 Execute `python server.py` e abra http://127.0.0.1:8765. No Windows, também pode usar `py server.py`.
 

@@ -47,7 +47,7 @@ class SigaaPage(HTMLParser):
             self.option = None
         if tag == "select":
             self.select = None
-        if tag in ("td", "th") and self.cell is not None:
+        if tag in ("td", "th") and self.cell is not None and self.row is not None:
             self.row["cells"].append(" ".join(self.cell.split()))
             self.cell = None
         if tag == "tr" and self.row is not None:

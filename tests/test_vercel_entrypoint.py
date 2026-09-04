@@ -8,7 +8,6 @@ from http.server import HTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
-
 ENTRYPOINT = Path(__file__).parent.parent / "api" / "index.py"
 API_ROOT = ENTRYPOINT.parent
 VERCEL_CONFIG = Path(__file__).parent.parent / "vercel.json"
@@ -55,7 +54,9 @@ class VercelEntrypointTest(unittest.TestCase):
         )
         self.assertEqual("nosniff", response.getheader("X-Content-Type-Options"))
         self.assertEqual("DENY", response.getheader("X-Frame-Options"))
-        self.assertIn("frame-ancestors 'none'", response.getheader("Content-Security-Policy"))
+        self.assertIn(
+            "frame-ancestors 'none'", response.getheader("Content-Security-Policy")
+        )
 
 
 if __name__ == "__main__":

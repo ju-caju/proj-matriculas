@@ -49,7 +49,7 @@ except ValueError:
     _base_handler = _UnavailableHandler
 
 
-class handler(_base_handler):
+class handler(_base_handler):  # type: ignore[valid-type, misc]
     """Entrypoint nomeado para descoberta pelo runtime Python da Vercel."""
 
     pass

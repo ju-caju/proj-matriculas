@@ -8,7 +8,6 @@ from typing import Callable
 from .sessions import SessionStore
 from .sigaa import SigaaClient
 
-
 ROOT = Path(__file__).parent.parent
 SECURITY_HEADERS = (
     ("X-Content-Type-Options", "nosniff"),
@@ -99,7 +98,8 @@ def make_handler(
                     200,
                     {
                         "authenticated": authenticated,
-                        "expired": bool(self.headers.get("Cookie")) and not authenticated,
+                        "expired": bool(self.headers.get("Cookie"))
+                        and not authenticated,
                     },
                 )
             if self.path not in files:

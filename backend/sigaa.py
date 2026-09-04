@@ -6,10 +6,11 @@ from urllib.request import HTTPCookieProcessor, Request, build_opener
 
 from .parser import SigaaPage
 
-
 BASE = "https://sigaa.ufpb.br"
 LOGIN = "/sigaa/logon.jsf"
 QUERY = "/sigaa/ensino/turma/busca_turma.jsf"
+
+
 class SigaaTransport(Protocol):
     def request(self, path, fields=None): ...
 
@@ -40,7 +41,7 @@ class UrllibTransport:
             raw = response.read()
             charset = response.headers.get_content_charset()
             if not charset:
-                match = re.search(br'charset=["\s]*([a-zA-Z0-9-]+)', raw[:8000])
+                match = re.search(rb'charset=["\s]*([a-zA-Z0-9-]+)', raw[:8000])
                 charset = match.group(1).decode() if match else "utf-8"
             return response.url, SigaaPage(raw.decode(charset, errors="replace"))
 

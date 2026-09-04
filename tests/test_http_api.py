@@ -141,7 +141,9 @@ class ApiTest(unittest.TestCase):
             self.clients[0].query_calls,
         )
 
-        self.assertEqual((200, {"ok": True}), self.request("POST", "/api/logout", {})[:2])
+        self.assertEqual(
+            (200, {"ok": True}), self.request("POST", "/api/logout", {})[:2]
+        )
         self.assertEqual(
             (200, {"authenticated": False, "expired": True}),
             self.request("GET", "/api/session")[:2],

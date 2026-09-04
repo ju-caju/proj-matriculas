@@ -8,7 +8,7 @@ from unittest.mock import patch
 from cryptography.fernet import Fernet
 
 from backend.http import make_handler
-from backend.production import make_production_handler, vercel_client_ip
+from backend.production import make_production_handler
 from backend.sessions import EncryptedRedisSessionStore, RedisRateLimiter
 
 
@@ -108,7 +108,11 @@ class SecureApiTest(unittest.TestCase):
             headers["Cookie"] = self.cookie
         connection.request("POST", path, json.dumps(body or {}), headers)
         response = connection.getresponse()
-        result = response.status, json.loads(response.read()), response.getheader("Set-Cookie")
+        result = (
+            response.status,
+            json.loads(response.read()),
+            response.getheader("Set-Cookie"),
+        )
         if result[2]:
             self.cookie = result[2].split(";", 1)[0]
         connection.close()
@@ -191,7 +195,9 @@ class SecureApiTest(unittest.TestCase):
             self.assertEqual(200, self.login(cookie=False)[0])
         status, body, _ = self.login(cookie=False)
         self.assertEqual(429, status)
-        self.assertEqual({"error": "Muitas tentativas de login. Tente novamente mais tarde."}, body)
+        self.assertEqual(
+            {"error": "Muitas tentativas de login. Tente novamente mais tarde."}, body
+        )
         self.assertEqual(900, self.redis.ttls["login:203.0.113.10"])
         self.assertEqual(200, self.login(ip="203.0.113.11", cookie=False)[0])
 
@@ -222,7 +228,10 @@ class SecureApiTest(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "criptografia"):
             make_production_handler(
-                {"KV_REST_API_URL": "https://redis.example", "KV_REST_API_TOKEN": "token"}
+                {
+                    "KV_REST_API_URL": "https://redis.example",
+                    "KV_REST_API_TOKEN": "token",
+                }
             )
 
     def test_production_accepts_stable_project_domain(self):

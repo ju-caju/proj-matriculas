@@ -3,7 +3,6 @@ from pathlib import Path
 
 from backend.parser import SigaaPage
 
-
 FIXTURES = Path(__file__).parent / "fixtures"
 
 
