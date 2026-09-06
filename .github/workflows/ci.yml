@@ -2,6 +2,10 @@ name: CI
 
 on:
   pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -75,3 +79,23 @@ jobs:
 
       - name: Measure Python coverage
         run: make coverage
+
+  sync-demo:
+    name: Sincronizar demo
+    needs: checks
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: sync-demo
+      cancel-in-progress: false
+    steps:
+      - name: Checkout validated commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Advance demo to validated main
+        env:
+          RELEASE_SHA: ${{ github.sha }}
+        run: bash scripts/sync_demo.sh "$RELEASE_SHA"

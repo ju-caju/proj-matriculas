@@ -1,5 +1,26 @@
 # Contribuindo
 
+## Branches e publicação
+
+- Antes de editar, execute `git status` e `git fetch origin`. Crie uma branch
+  `feat/`, `fix/` ou `chore/` a partir de `origin/main`. Preserve alterações
+  locais que já existiam.
+- Abra PR para `main`. Não desenvolva nem faça commits diretamente em `main`
+  ou `demo`.
+- `main` contém o código aprovado e dispara o deploy de produção na Vercel.
+  Após os checks de `main`, o CI avança `demo` para o mesmo commit, disparando
+  a publicação da demonstração. A sincronização nunca usa force push.
+- Se `demo` tiver commits exclusivos, reúna as mudanças em uma branch de
+  integração e abra PR para `main`. Preserve a ancestralidade com merge commit;
+  squash ou rebase dessa integração deixariam a demo divergente.
+- Demo e produção usam o mesmo código. As diferenças ficam nas variáveis da
+  Vercel: Preview usa `APP_MODE=demo` e dados fictícios; Production usa SIGAA,
+  Redis e chave de sessão. Não coloque segredos de produção em Preview.
+- Rode `make check` e o smoke test local antes do PR. Confira os checks remotos
+  antes do merge. Depois da publicação, confira os dois deployments e os SHAs;
+  um push ou workflow verde, sozinho, não confirma que o site foi atualizado.
+- O procedimento e a recuperação de falhas ficam em [RUNBOOK.md](RUNBOOK.md).
+
 ## Verificações locais
 
 Instale o `uv` e execute `make install`. Os mesmos comandos usados no CI ficam

@@ -32,53 +32,66 @@ O smoke test verifica a página, `/api/health`, o estado de sessão, os corpos
 JSON e os headers de segurança. Ele não envia credenciais, não tenta login e
 não acessa o SIGAA. O container não deve receber segredos de produção.
 
-## Prévia na Vercel
+## Branches e ambientes
 
-No projeto Vercel, conecte o repositório privado pelo GitHub e habilite uma
-implantação de prévia para cada pull request. A prévia deve usar o ambiente
-`Preview` e nunca deve ser promovida automaticamente para produção. Configure
-as variáveis abaixo separadamente das de produção:
+Crie branches `feat/`, `fix/` ou `chore/` a partir de `origin/main` e abra PR
+para `main`. Cada PR executa CI e CodeQL e recebe uma prévia com dados fictícios.
+O merge depende dos checks e da conferência da prévia.
 
-| Variável | Preview | Production |
+`main` é a branch de produção da Vercel. O merge dispara seu deploy e uma nova
+execução do CI. Quando os checks de `main` passam, o job `Sincronizar demo`
+executa `scripts/sync_demo.sh` e avança a branch `demo` para o mesmo SHA. O push
+em `demo` dispara a prévia com domínio estável. Não faça commits nessa branch.
+
+A produção e a demo são deployments separados. A produção pode terminar antes
+da demo; uma falha em um ambiente não desfaz a publicação do outro. Confira o
+estado e o SHA de ambos no painel da Vercel antes de considerar a entrega pronta.
+
+| Configuração | Preview, incluindo demo e PRs | Production |
 | --- | --- | --- |
-| `KV_REST_API_URL` | banco Redis de prévia | banco Redis de produção |
-| `KV_REST_API_TOKEN` | token do banco de prévia | token do banco de produção |
-| `SESSION_ENCRYPTION_KEY` | chave Fernet exclusiva de prévia | chave Fernet exclusiva de produção |
+| `APP_MODE` | `demo` | ausente |
+| `APP_HOST` | alias estável somente na branch `demo` | domínio público de produção |
+| `KV_REST_API_URL` e `KV_REST_API_TOKEN` | ausentes | Redis de produção |
+| `SESSION_ENCRYPTION_KEY` | ausente | chave Fernet de produção |
 | `VERCEL_URL` | fornecida pela Vercel | fornecida pela Vercel |
-| `APP_HOST` | domínio público da prévia, se houver | domínio público estável, sem protocolo |
 
-Marque os três primeiros valores como secrets e não os copie para arquivos,
-logs, comentários ou fixtures. O Redis e a chave não devem ser reutilizados
-entre ambientes: isso limita o impacto de uma exposição e impede que sessões de
-prévia sejam aceitas na produção. A função falha com 503 quando a configuração
-obrigatória não existe.
+As prévias aceitam `demo/demo`, usam dados sintéticos e não acessam SIGAA ou
+Redis. O código recusa `APP_MODE=demo` no ambiente Production. Sem configuração
+válida de produção, a API responde 503. Não promova o deployment da demo para
+produção; publique o mesmo código com a configuração de Production.
 
-Após uma implantação de prévia, execute a verificação sem credenciais:
+## Verificação da entrega
 
-```sh
-python scripts/check_preview.py --sem-configuracao https://URL-DA-PREVIA
-python scripts/check_preview.py https://URL-DA-PREVIA
-```
+1. Execute `make check` e `make smoke-test` localmente antes de abrir o PR.
+2. Confira CI, CodeQL e a prévia do PR antes do merge em `main`.
+3. Após o merge, confira CI e o job `Sincronizar demo`. Verifique que `main` e
+   `demo` apontam para o mesmo SHA no GitHub.
+4. No painel **Deployments** da Vercel, confirme que os deployments de produção
+   e demo estão prontos e usam esse SHA. Confira o domínio de cada ambiente.
+5. Verifique `/api/health` e a página de cada ambiente sem enviar credenciais.
+   Testes automatizados do fluxo de estudante continuam usando o backend
+   fictício local. Uma consulta real ao SIGAA depende de ação manual do usuário.
 
-O segundo comando consome as cinco tentativas de login permitidas pelo IP do
-verificador; aguarde a janela de quinze minutos antes de testar manualmente.
+Para diagnosticar a configuração de produção, `scripts/check_preview.py`
+continua disponível. A execução completa consome as cinco tentativas de login
+permitidas por IP; não a execute junto de um teste manual naquele IP. Esse
+verificador não se aplica ao contrato de autenticação da demo.
 
-## Produção
+## Recuperar a sincronização
 
-Nas configurações de Git da Vercel, defina `main` como a única *Production
-Branch*. Pull requests continuam sendo prévias; branches diferentes de `main`
-não podem disparar deploy de produção. Promova uma prévia somente após os
-checks obrigatórios e a conferência manual do proprietário.
+Se os checks de `main` falharem, corrija por PR. A demo permanece no último SHA
+validado. Se a sincronização falhar por indisponibilidade, reexecute o workflow
+CI em `main` pela opção **Run workflow**. A execução valida tudo novamente e
+sincroniza somente se o SHA ainda for o mais recente de `main`.
 
-O procedimento de deploy é:
+Se houver commits exclusivos em `demo`, o script interrompe a sincronização.
+Crie uma branch de integração, reúna os históricos e abra PR para `main`. Use
+merge commit nesse PR para preservar a ancestralidade. Não use force push para
+encobrir a divergência.
 
-1. Faça merge em `main` depois de `make check` e do smoke test da prévia.
-2. Aguarde o deploy automático da Vercel e confirme o domínio e o status da
-   função em **Deployments**.
-3. Execute `scripts/check_preview.py` contra o domínio publicado quando não
-   houver login manual planejado para aquele IP.
-4. Faça uma consulta e logout manualmente com uma sessão nova do SIGAA; nunca
-   coloque a credencial em automação.
+O job usa `GITHUB_TOKEN` com escrita no conteúdo apenas na sincronização.
+Os demais jobs têm acesso de leitura. Os deploys são responsabilidade da
+integração Git da Vercel; o workflow não recebe tokens ou variáveis da Vercel.
 
 ## Observabilidade e diagnóstico
 

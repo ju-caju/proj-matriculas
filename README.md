@@ -118,58 +118,24 @@ as rotas para ela. O `vercel.json` aplica CSP,
 `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` também aos arquivos
 estáticos.
 
-### Ambiente de desenvolvimento com dados simulados
+### Demo, prévias e produção
 
-Para entregar uma prévia a alguém sem acesso ao SIGAA, crie uma branch, por exemplo
-`demo`, e configure `APP_MODE=demo` somente no ambiente **Preview** da Vercel. Não
-configure Redis, chave Fernet nem credenciais do SIGAA nesse ambiente. Faça um novo
-deploy da branch e entre com:
+O código aprovado entra em `main` por PR e dispara o deploy de produção.
+Depois dos checks, o CI sincroniza `demo` com o mesmo commit e a Vercel publica
+a demonstração. Desenvolva em branches `feat/`, `fix/` ou `chore/` criadas a
+partir de `origin/main`.
 
-```text
-Usuário: demo
-Senha: demo
-```
+Configure `APP_MODE=demo` no ambiente Preview da Vercel, para todas as branches.
+As prévias e a demo usam turmas fictícias, sem Redis ou acesso ao SIGAA. Entre
+com usuário `demo` e senha `demo`. O alias fixo da demonstração fica em
+`APP_HOST`, limitado à branch `demo` no ambiente Preview.
 
-Esse modo não faz requisições ao SIGAA. Ele usa turmas sintéticas, aceita os mesmos
-filtros da aplicação e mantém a sessão em um cookie sem dados pessoais. A aplicação
-recusa iniciar o modo demo quando `VERCEL_ENV=production`. Na configuração da
-variável na Vercel, selecione apenas **Preview** e deixe **Production** desmarcado.
+Production usa `main`, com as variáveis de Redis e a chave de sessão somente
+nesse ambiente. Não configure `APP_MODE=demo` em Production. O código recusa
+essa combinação e responde 503 se a configuração de produção estiver ausente.
 
-1. Importe o repositório na Vercel em um projeto no plano Hobby.
-2. Conecte um banco Upstash Redis no plano gratuito. A integração deve criar
-   `KV_REST_API_URL` e `KV_REST_API_TOKEN` nos ambientes de prévia.
-3. Gere uma chave Fernet e cadastre o resultado como variável sensível
-   `SESSION_ENCRYPTION_KEY` somente na Vercel:
-
-   ```sh
-   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-   ```
-
-4. Confirme que `VERCEL_URL`, variável de sistema da Vercel, está disponível para
-   as funções. Para usar um alias fixo da branch, configure também `APP_HOST` com
-   esse domínio somente em **Preview** e na branch `demo`. Crie uma implantação de
-   prévia sem promover para produção.
-5. Não habilite recarga automática, plano pago nem cobrança por excedentes para
-   cumprir o limite deste ticket.
-
-Antes de cadastrar os segredos, a API deve responder 503 sem citar a configuração
-ausente:
-
-```sh
-python3 scripts/check_preview.py --sem-configuracao https://URL-DA-PREVIA
-```
-
-Depois de conectar o Redis, cadastrar a chave e gerar outra prévia, execute:
-
-```sh
-python3 scripts/check_preview.py https://URL-DA-PREVIA
-```
-
-O verificador carrega a interface, consulta o estado sem sessão, testa os headers,
-os corpos JSON, a origem e o limite de login. Ele usa somente corpos inválidos e
-nunca envia usuário ou senha ao SIGAA. A execução consome as seis tentativas do IP
-do verificador; aguarde quinze minutos antes de tentar um login manual pelo mesmo
-IP.
+Consulte [RUNBOOK.md](RUNBOOK.md) para publicação, verificação dos dois ambientes
+e recuperação de falhas de sincronização.
 
 ## Produção
 
@@ -180,7 +146,7 @@ público `ju-caju/proj-matriculas` dispara os deploys de produção.
 Para reproduzir a configuração:
 
 1. Importe o repositório na Vercel com o preset `Other`.
-2. Crie um banco Upstash Redis no plano Free e conecte-o a Production e Preview.
+2. Crie um banco Upstash Redis no plano Free e conecte-o somente a Production.
    Use o prefixo `KV_REST_API` e marque as variáveis como secretas. Confirme a
    criação de `KV_REST_API_URL` e `KV_REST_API_TOKEN`.
 3. Gere uma chave Fernet e salve-a como segredo `SESSION_ENCRYPTION_KEY`. Nunca
