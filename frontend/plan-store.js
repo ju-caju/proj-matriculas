@@ -6,14 +6,21 @@
 })(globalThis, function () {
   function createPlanStore({ storage, key }) {
     const readStorage = storage || globalThis.localStorage;
-    const identify = key || (value => JSON.stringify([
+    const courseKey = key || (value => JSON.stringify([
       value.periodo,
       value.disciplina,
       value.turma,
       value.horario,
     ]));
 
+    const identify = value => value.type === 'commitment' ? JSON.stringify([value.periodo, 'commitment', value.id]) : courseKey(value);
+
     function valid(value) {
+      if (value?.type === 'commitment') {
+        return typeof value.periodo === 'string' && typeof value.id === 'string' && !!value.id &&
+          typeof value.nome === 'string' && !!value.nome.trim() &&
+          typeof value.horario === 'string' && /^(?:[1-7][MT][1-6]|[1-7]N[1-4])(?: (?:[1-7][MT][1-6]|[1-7]N[1-4]))*$/.test(value.horario);
+      }
       return value && typeof value === 'object' &&
         typeof value.periodo === 'string' &&
         typeof value.disciplina === 'string' &&

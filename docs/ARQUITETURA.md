@@ -71,3 +71,18 @@ incluindo promoção, observabilidade e rollback, está em [`RUNBOOK.md`](../RUN
 Os controles, ameaças residuais e a resposta a incidentes estão no [modelo de
 ameaças](../MODELO-DE-AMEACAS.md). Nenhuma etapa automatizada deste repositório
 envia credenciais, cookies ou requisições ao SIGAA real.
+
+## Compromissos pessoais
+
+O planejamento local de cada semestre, em `ufpb-plan:<semestre>`, contém turmas
+no formato anterior e compromissos com `type: "commitment"`, `id`, `nome`,
+`periodo` e `horario`. O identificador permanece estável na edição. Os horários
+contêm blocos semanais da tabela da UFPB, sem datas, ordenados e sem repetições.
+Nenhum campo de compromisso é enviado à API.
+
+O formulário combina dias e blocos por horário. A grade, o detalhamento e o PNG
+usam o mesmo cálculo de sobreposição, incluindo as restrições de datas das
+turmas. Conflitos avisam sem impedir o cadastro. Limpar a grade apaga os dois
+tipos de item somente no semestre selecionado. Os testes de navegador usam
+backend fictício; `BROWSER_ARTIFACT_DIR` permite guardar os PNGs baixados para
+inspeção visual.

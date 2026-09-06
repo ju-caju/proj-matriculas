@@ -5,3 +5,5 @@ main{max-width:1600px;margin-top:24px}.secondary{background:white;color:#451a03;
 #query-form{flex-wrap:wrap;gap:12px}#query-form .search-name{flex:1 1 230px}#query-form .search-name input{width:100%}#query-form .unit{flex:1 1 250px}.search-help{font-size:13px;margin:10px 0 0}
 .catalog-filters{display:grid;gap:12px}.catalog select{width:100%}
 .week-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}@media(max-width:740px){.week-heading{align-items:flex-start}.week-actions{max-width:150px}.week-actions button{width:100%}}
+
+dialog{width:min(760px,95vw);max-height:90vh;overflow:auto;border:1px solid #c9c1b6;border-radius:8px;padding:24px}dialog::backdrop{background:#29252480}#commitment-form{display:flex;flex-direction:column}#commitment-form h2,#commitment-form p{margin:0}.commitment-choices{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}.commitment-choices label{flex-direction:row;align-items:center;font-weight:400;padding:4px}.commitment-choices input{min-height:20px;width:20px}#commitment-blocks fieldset{margin-bottom:16px;border:1px solid #d8d1c7;border-radius:5px}

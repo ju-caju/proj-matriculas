@@ -48,7 +48,10 @@
     }
     return result;
   }
-  const key=r=>JSON.stringify([r.periodo,r.disciplina,r.turma,r.horario]);
+  const key=r=>r.type==='commitment'?JSON.stringify([r.periodo,'commitment',r.id]):JSON.stringify([r.periodo,r.disciplina,r.turma,r.horario]);
+  const name=r=>r.type==='commitment'?r.nome:r.disciplina.replace(/\s*\(GRADUAÇÃO\)\s*$/i,'');
+  const label=r=>r.type==='commitment'?'Compromisso pessoal':r.turma;
+  const counts=items=>{const commitments=items.filter(r=>r.type==='commitment').length,courses=items.length-commitments;return `${courses} turma${courses===1?'':'s'} · ${commitments} compromisso${commitments===1?'':'s'}`;};
   function describe(code) {
     const parsed=parse(code);if(parsed.errors.length)return 'Horário a conferir: '+code;
     const groups=new Map();
@@ -62,6 +65,6 @@
     for(const group of groups){const ends=[];for(const event of group.events){let lane=ends.findIndex(end=>end<=event.start);if(lane<0)lane=ends.length;ends[lane]=event.end;event.lane=lane;}for(const event of group.events)event.lanes=ends.length;}
     return sorted;
   }
-  const api={TIMES,DAYS,time,parse,overlap,conflicts,key,describe,layout};
+  const api={TIMES,DAYS,time,parse,overlap,conflicts,key,name,label,counts,describe,layout};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;else root.Schedule=api;
 })(globalThis);
