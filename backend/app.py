@@ -368,6 +368,7 @@ def create_app(
             "dom.js",
             "plan-store.js",
             "api-client.js",
+            "course-filter.js",
             "grade-image.js",
         }:
             return _error(404, "Arquivo não encontrado.")

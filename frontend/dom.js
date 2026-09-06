@@ -7,8 +7,8 @@
     if (className) value.className = className;
     return value;
   };
-  const courseName = row => row.disciplina.replace(/\s*\(GRADUAÇÃO\)\s*$/i, '');
-  const courseColor = row => 'color-' + ([...row.disciplina].reduce(
+  const courseName = row => Schedule.name(row);
+  const courseColor = row => 'color-' + ([...Schedule.name(row)].reduce(
     (number, character) => (number * 31 + character.charCodeAt(0)) >>> 0, 0
   ) % 6);
   root.FrontendDom = { $: query, el: element, name: courseName, color: courseColor };

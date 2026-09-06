@@ -1,8 +1,8 @@
 // Canvas export is isolated from the DOM planner so it can be tested independently.
 (function (root) {
   const S = root.Schedule;
-  const name = row => row.disciplina.replace(/\s*\(GRADUAÇÃO\)\s*$/i, '');
-  const color = row => 'color-' + ([...row.disciplina].reduce(
+  const name = row => S.name(row);
+  const color = row => 'color-' + ([...S.name(row)].reduce(
     (number, character) => (number * 31 + character.charCodeAt(0)) >>> 0, 0
   ) % 6);
 
@@ -43,10 +43,10 @@
     font(18, true);
     const legends = courses.map((row, index) => {
       font(18, true);
-      const title = wrap(`${index + 1}. ${name(row)} · ${row.turma}`, width - 2 * margin - 28);
+      const title = wrap(`${index + 1}. ${name(row)} · ${S.label(row)}`, width - 2 * margin - 28);
       font(16);
       const details = wrap(
-        `${S.describe(row.horario)} · ${row.docente || ''} · ${row.local || ''} · ${row.horario}`,
+        row.type === 'commitment' ? `${S.describe(row.horario)} · Toda semana` : `${S.describe(row.horario)} · ${row.docente || ''} · ${row.local || ''} · ${row.horario}`,
         width - 2 * margin - 28
       );
       return { row, title, details, height: title.length * 23 + details.length * 21 + 24 };
@@ -75,10 +75,10 @@
       context.fillText(value, x, y);
     };
     text('Minha grade · UFPB', margin, 30, 30, true);
-    text(`${term} · ${courses.length} turmas`, margin, 72, 19);
+    text(`${term} · ${S.counts(courses)}`, margin, 72, 19);
     text(
       unknown ? 'Há horários não reconhecidos: confira os detalhes abaixo.' :
-        clashes.length ? `${clashes.length} par(es) de turmas com choque de horário` :
+        clashes.length ? `${clashes.length} par(es) de atividades com choque de horário` :
           'Sem choques de horário',
       margin, 103, 16, false, clashes.length || unknown ? '#a32620' : '#365d3f'
     );
@@ -127,20 +127,23 @@
         context.beginPath();
         context.rect(x + 4, y + 3, Math.max(0, blockWidth - 8), blockHeight - 6);
         context.clip();
-        text(`${event.index + 1}${clash ? ' · CHOQUE' : ''}`, x + 7, y + 6, 13, true, clash ? '#a32620' : '#292524');
-        font(14, true);
+        text(`${event.index + 1}${clash ? ' !' : ''}`, x + 5, y + 3, 11, true, clash ? '#a32620' : '#292524');
+        font(12, true);
         const lines = wrap(name(event.row), Math.max(10, blockWidth - 14));
-        const maxLines = Math.max(1, Math.floor((blockHeight - 56) / 17));
+        const maxLines = Math.max(1, Math.floor((blockHeight - 36) / 14));
         lines.slice(0, maxLines).forEach((line, index) => text(
           line + (index === maxLines - 1 && lines.length > maxLines ? '…' : ''),
-          x + 7, y + 26 + index * 17, 14, true
+          x + 7, y + 17 + index * 14, 12, true
         ));
-        text(`${S.time(event.start)}–${S.time(event.end)}`, x + 7, y + blockHeight - 22, 12);
+        const hours = `${S.time(event.start)}–${S.time(event.end)}`;
+        font(11);
+        const timeSize = Math.min(11, 11 * Math.max(1, blockWidth - 10) / context.measureText(hours).width);
+        text(hours, x + 5, y + blockHeight - 14, timeSize);
         context.restore();
       }
     });
     let y = top + gridHeight + 30;
-    text('Disciplinas e horários', margin, y, 22, true);
+    text('Turmas, compromissos e horários · ! indica choque', margin, y, 22, true);
     y += 34;
     for (const entry of legends) {
       const [, border] = palette[Number(color(entry.row).slice(-1))];

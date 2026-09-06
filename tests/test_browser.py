@@ -64,6 +64,10 @@ class FakeBackend(http.server.BaseHTTPRequestHandler):
             "/frontend/dom.js": ("frontend/dom.js", "text/javascript"),
             "/frontend/plan-store.js": ("frontend/plan-store.js", "text/javascript"),
             "/frontend/api-client.js": ("frontend/api-client.js", "text/javascript"),
+            "/frontend/course-filter.js": (
+                "frontend/course-filter.js",
+                "text/javascript",
+            ),
             "/frontend/grade-image.js": ("frontend/grade-image.js", "text/javascript"),
             "/style.css": ("style.css", "text/css"),
         }
@@ -208,6 +212,164 @@ class DevTools:
 
 @unittest.skipUnless(shutil.which("google-chrome"), "Google Chrome não está instalado")
 class BrowserFlowTest(unittest.TestCase):
+    def check_commitments(self, page, download_dir):
+        def click(text):
+            page.evaluate(
+                f"[...document.querySelectorAll('button')].find(b=>b.textContent==={json.dumps(text)}).click()"
+            )
+
+        def fill(title, days, slots):
+            page.evaluate(
+                f"document.querySelector('#commitment-name').value={json.dumps(title)}"
+            )
+            page.evaluate(
+                f"document.querySelectorAll('#commitment-blocks fieldset:last-child input').forEach(i=>i.checked=(i.name==='day'?{json.dumps(days)}:{json.dumps(slots)}).includes(i.value))"
+            )
+
+        def create(title, days, slots):
+            click("Adicionar compromisso")
+            fill(title, days, slots)
+            click("Salvar compromisso")
+
+        def text(selector):
+            return page.evaluate(
+                f"document.querySelector({json.dumps(selector)}).textContent"
+            )
+
+        def reload():
+            page.command("Page.reload")
+            self.assertTrue(
+                page.evaluate(
+                    "(async()=>{await new Promise(r=>setTimeout(r,500));for(let i=0;i<50;i++){if(document.querySelector('#query-panel')?.hidden===false)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                    True,
+                )
+            )
+
+        def semester(period):
+            page.evaluate(
+                f"document.querySelector('[name=period]').value='{period}';document.querySelector('#query-form').requestSubmit()"
+            )
+            self.assertTrue(
+                page.evaluate(
+                    "(async()=>{for(let i=0;i<50;i++){if(!document.querySelector('#query-form button').disabled)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                    True,
+                )
+            )
+
+        # A second commitment partly overlaps the course and the first commitment.
+        create("Estágio", ["2"], ["M2", "M3"])
+        self.assertIn("3 pares", text("#conflict-status"))
+        blocks = page.evaluate(
+            "[...document.querySelector('[aria-label=Segunda]').querySelectorAll('.class-block')].map(b=>{const r=b.getBoundingClientRect();return {left:r.left,right:r.right,top:r.top,bottom:r.bottom}})"
+        )
+        self.assertEqual(4, len(blocks))
+        for index, a in enumerate(blocks):
+            for b in blocks[index + 1 :]:
+                self.assertFalse(
+                    a["left"] < b["right"]
+                    and b["left"] < a["right"]
+                    and a["top"] < b["bottom"]
+                    and b["top"] < a["bottom"]
+                )
+
+        # Export the actual download, including three simultaneous activities.
+        page.command(
+            "Browser.setDownloadBehavior",
+            {"behavior": "allow", "downloadPath": download_dir},
+        )
+        click("Baixar imagem")
+        png = Path(download_dir) / "minha-grade-ufpb-2026.2.png"
+        for _ in range(100):
+            if png.exists():
+                break
+            time.sleep(0.05)
+        self.assertTrue(png.exists())
+        self.assertEqual(b"\x89PNG\r\n\x1a\n", png.read_bytes()[:8])
+        artifact_dir = os.environ.get("BROWSER_ARTIFACT_DIR")
+        if artifact_dir:
+            Path(artifact_dir).mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(png, Path(artifact_dir) / "grade-conflitos.png")
+
+        page.evaluate(
+            "document.querySelector('[aria-label=\"Editar Trabalho\"]').click()"
+        )
+        fill("Trabalho revisado", ["5"], ["T1"])
+        # Editing keeps earlier day groups, so remove them through the form.
+        page.evaluate(
+            "document.querySelectorAll('#commitment-blocks fieldset').forEach((g,i,all)=>{if(i<all.length-1)g.querySelector('button').click()})"
+        )
+        click("Salvar compromisso")
+        self.assertIn("1 par", text("#conflict-status"))
+        page.evaluate(
+            "document.querySelector('[aria-label=\"Remover Estágio Compromisso pessoal\"]').click()"
+        )
+        self.assertIn("Sem choques", text("#conflict-status"))
+        reload()
+        self.assertIn("Trabalho revisado", text("#selected-list"))
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+
+        semester("1")
+        self.assertNotIn("Trabalho revisado", text("#selected-list"))
+        create("Outro semestre", ["3"], ["N1"])
+        semester("2")
+        click("Limpar grade")
+        self.assertEqual("", text("#selected-list"))
+        reload()
+        self.assertEqual("", text("#selected-list"))
+        semester("1")
+        self.assertIn("Outro semestre", text("#selected-list"))
+        semester("2")
+
+        # Validation, different hours per day, duplicate blocks, and touching intervals.
+        click("Adicionar compromisso")
+        fill("   ", ["2"], ["M2"])
+        click("Salvar compromisso")
+        self.assertIn("Informe um nome", text("#commitment-error"))
+        fill("Rotina", [], [])
+        click("Salvar compromisso")
+        self.assertTrue(
+            page.evaluate("document.querySelector('#commitment-dialog').open")
+        )
+        fill("Rotina", ["2", "4"], ["M2"])
+        click("Adicionar outro horário")
+        fill("Rotina", ["5"], ["T1"])
+        click("Adicionar outro horário")
+        fill("Rotina", ["2"], ["M2"])
+        click("Salvar compromisso")
+        self.assertEqual(
+            3,
+            page.evaluate("document.querySelectorAll('#calendar .class-block').length"),
+        )
+        create("Consecutivo", ["2"], ["M3"])
+        self.assertIn("Sem choques", text("#conflict-status"))
+        self.assertIn("Quinta", text("#selected-list"))
+        self.assertIn("13:00", text("#selected-list"))
+        png.unlink()
+        click("Baixar imagem")
+        for _ in range(100):
+            if png.exists():
+                break
+            time.sleep(0.05)
+        self.assertTrue(png.exists())
+        if artifact_dir:
+            shutil.copyfile(png, Path(artifact_dir) / "grade-compromissos.png")
+        # Storage failure remains visible while the in-memory edit still succeeds.
+        page.evaluate(
+            "Storage.prototype.setItem=function(){throw new DOMException('Quota exceeded','QuotaExceededError')}"
+        )
+        page.evaluate(
+            "document.querySelector('[aria-label=\"Editar Consecutivo\"]').click()"
+        )
+        fill("Consecutivo revisado", ["2"], ["M2"])
+        click("Salvar compromisso")
+        self.assertIn("Não foi possível salvar", text("#save-note"))
+        self.assertIn("choque", text("#status"))
+        self.assertIn("Consecutivo revisado", text("#selected-list"))
+        # Adding a course after commitments still warns and permits inclusion.
+        page.evaluate("document.querySelector('#courses article button').click()")
+        self.assertIn("choque", text("#status"))
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+
     def test_login_query_plan_and_logout_with_fake_backend(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), FakeBackend)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -219,6 +381,7 @@ class BrowserFlowTest(unittest.TestCase):
                 "--headless",
                 "--no-sandbox",
                 "--disable-gpu",
+                "--disable-dev-shm-usage",
                 "--remote-debugging-port=0",
                 "--user-data-dir=" + profile.name,
                 "about:blank",
@@ -230,14 +393,22 @@ class BrowserFlowTest(unittest.TestCase):
         devtools = None
         try:
             browser_url = None
-            deadline = time.monotonic() + 10
+            chrome_errors = []
+            deadline = time.monotonic() + 30
             while time.monotonic() < deadline and browser_url is None:
                 ready, _, _ = select.select([chrome.stderr], [], [], 0.2)
                 if ready:
                     line = chrome.stderr.readline()
+                    chrome_errors.append(line.rstrip())
                     if "DevTools listening on " in line:
                         browser_url = line.split("DevTools listening on ", 1)[1].strip()
-            self.assertIsNotNone(browser_url, "Chrome não abriu o protocolo DevTools")
+                elif chrome.poll() is not None:
+                    break
+            self.assertIsNotNone(
+                browser_url,
+                "Chrome não abriu o protocolo DevTools:\n"
+                + "\n".join(chrome_errors[-20:]),
+            )
             browser = urllib.parse.urlparse(browser_url)
             with urllib.request.urlopen(
                 f"http://{browser.netloc}/json/list", timeout=5
@@ -303,12 +474,51 @@ class BrowserFlowTest(unittest.TestCase):
                 )
             )
             devtools.evaluate(
+                "document.querySelector('#shift-filter').value='evening'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "0 turmas disponíveis",
+                devtools.evaluate("document.querySelector('#count').textContent"),
+            )
+            devtools.evaluate(
+                "document.querySelector('#shift-filter').value='morning'; document.querySelector('#shift-filter').dispatchEvent(new Event('change'))"
+            )
+            self.assertEqual(
+                "1 turma disponível",
+                devtools.evaluate("document.querySelector('#count').textContent"),
+            )
+            devtools.evaluate(
                 "document.querySelector('#courses article button').click()"
             )
             self.assertEqual(
-                "Turmas na grade (1) · detalhes e remoção",
+                "Itens na grade (1 turma · 0 compromissos) · detalhes e remoção",
                 devtools.evaluate(
                     "document.querySelector('#selected-summary').textContent"
+                ),
+            )
+            devtools.evaluate("document.querySelector('#new-commitment').click()")
+            self.assertTrue(
+                devtools.evaluate("document.querySelector('#commitment-dialog').open")
+            )
+            devtools.evaluate(
+                "document.querySelector('#commitment-name').value='Trabalho'; document.querySelector('[name=day][value=\"2\"]').checked=true; document.querySelector('[name=day][value=\"4\"]').checked=true; document.querySelector('[name=slot][value=M2]').checked=true; document.querySelector('#commitment-form').requestSubmit()"
+            )
+            self.assertIn(
+                "Trabalho",
+                devtools.evaluate(
+                    "document.querySelector('#selected-list').textContent"
+                ),
+            )
+            self.assertIn(
+                "choque",
+                devtools.evaluate(
+                    "document.querySelector('#conflict-status').textContent"
+                ),
+            )
+            self.assertEqual(
+                4,
+                devtools.evaluate(
+                    "document.querySelectorAll('#calendar .class-block').length"
                 ),
             )
             devtools.evaluate("document.querySelector('#export-plan').click()")
@@ -318,6 +528,7 @@ class BrowserFlowTest(unittest.TestCase):
                     True,
                 )
             )
+            self.check_commitments(devtools, profile.name)
             devtools.evaluate("document.querySelector('#logout').click()")
             time.sleep(0.5)
             logged_out = devtools.evaluate(

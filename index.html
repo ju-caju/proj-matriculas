@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minha grade · UFPB</title><link rel="stylesheet" href="/style.css"><script src="/schedule.js" defer></script><script src="/frontend/dom.js" defer></script><script src="/frontend/plan-store.js" defer></script><script src="/frontend/api-client.js" defer></script><script src="/frontend/grade-image.js" defer></script><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minha grade · UFPB</title><link rel="stylesheet" href="/style.css"><script src="/schedule.js" defer></script><script src="/frontend/dom.js" defer></script><script src="/frontend/plan-store.js" defer></script><script src="/frontend/api-client.js" defer></script><script src="/frontend/course-filter.js" defer></script><script src="/frontend/grade-image.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <header><strong>Minha grade · UFPB</strong><button id="logout" class="secondary" hidden>Sair</button></header>
 <main>
@@ -25,9 +25,9 @@
 </form>
 <p class="search-help">Busque pela disciplina, pelo professor ou pelos dois juntos. Deixe “Todos os departamentos” para pesquisar em toda a UFPB.</p>
 <div class="planner">
-<aside class="catalog" aria-label="Turmas disponíveis"><div class="remove-hint">Solte aqui ou fora da grade para remover a turma</div><h2 id="count">Turmas disponíveis</h2><label>Buscar turma<input id="filter" type="search" placeholder="Disciplina, docente ou horário"></label><p id="empty">Faça uma consulta para ver as turmas.</p><div id="courses" class="course-list"></div></aside>
+<aside class="catalog" aria-label="Turmas disponíveis"><div class="remove-hint">Solte aqui ou fora da grade para remover o item</div><h2 id="count">Turmas disponíveis</h2><div class="catalog-filters"><label>Buscar turma<input id="filter" type="search" placeholder="Disciplina, docente ou horário"></label><label>Turno<select id="shift-filter"><option value="">Todos os turnos</option><option value="morning">Manhã</option><option value="afternoon">Tarde</option><option value="evening">Noite</option></select></label></div><p id="empty">Faça uma consulta para ver as turmas.</p><div id="courses" class="course-list"></div></aside>
 <section class="week-panel" aria-label="Planejamento semanal">
-<div class="week-heading"><div><h2 id="plan-title">Minha semana · 2026.2</h2><p id="plan-count">Nenhuma turma selecionada</p></div><div class="week-actions"><button id="export-plan" disabled>Baixar imagem</button><button id="clear-plan" class="secondary" disabled>Limpar grade</button></div></div>
+<div class="week-heading"><div><h2 id="plan-title">Minha semana · 2026.2</h2><p id="plan-count">Nenhuma turma selecionada</p></div><div class="week-actions"><button id="new-commitment" class="secondary">Adicionar compromisso</button><button id="export-plan" disabled>Baixar imagem</button><button id="clear-plan" class="secondary" disabled>Limpar grade</button></div></div>
 <div id="conflict-status" class="conflict-status" role="status" aria-live="polite">Adicione uma turma para começar.</div>
 <div id="calendar-drop" class="calendar-drop" aria-label="Solte uma turma para adicioná-la aos horários oficiais"><div id="drop-hint">Solte aqui para adicionar nos dias e horários da turma</div><div class="calendar-scroll"><div id="calendar" class="calendar"></div></div></div>
 <p class="calendar-note">Planejamento local, sem efetuar matrícula. <a href="https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/" target="_blank" rel="noopener">Horários da UFPB</a> · N1 começa às 19h.</p>
@@ -36,6 +36,16 @@
 <p id="save-note" class="calendar-note">Sua grade fica salva neste navegador, separada por semestre.</p>
 </section></div>
 </section>
+<dialog id="commitment-dialog" aria-labelledby="commitment-title">
+<form id="commitment-form">
+<h2 id="commitment-title">Novo compromisso pessoal</h2>
+<p>Repete toda semana no semestre <span id="commitment-semester"></span>. Selecione os dias e blocos de cada horário.</p>
+<label>Nome<input id="commitment-name" required></label>
+<div id="commitment-blocks"></div>
+<button id="add-commitment-block" type="button" class="secondary">Adicionar outro horário</button>
+<p id="commitment-error" class="warning" role="alert"></p>
+<div class="week-actions"><button type="submit">Salvar compromisso</button><button id="cancel-commitment" type="button" class="secondary">Cancelar</button></div>
+</form></dialog>
 <p id="status" role="status" aria-live="polite"></p>
 </main>
 </body></html>

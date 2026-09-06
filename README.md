@@ -63,7 +63,8 @@ O frontend continua sendo HTML, CSS e JavaScript puro. `app.js` coordena eventos
 estado da tela; `schedule.js` concentra a conversão de horários e conflitos;
 `frontend/dom.js` reúne os construtores de elementos; `frontend/plan-store.js`
 mantém a grade no `localStorage` por semestre; `frontend/api-client.js` encapsula
-as chamadas JSON; e `frontend/grade-image.js` gera a exportação PNG sem enviar a
+as chamadas JSON; `frontend/course-filter.js` combina a busca textual com o filtro
+de turno; e `frontend/grade-image.js` gera a exportação PNG sem enviar a
 grade ao servidor. Esses módulos não introduzem um framework de interface nem
 alteram o contrato visual da página.
 
@@ -117,39 +118,24 @@ as rotas para ela. O `vercel.json` aplica CSP,
 `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` também aos arquivos
 estáticos.
 
-1. Importe o repositório na Vercel em um projeto no plano Hobby.
-2. Conecte um banco Upstash Redis no plano gratuito. A integração deve criar
-   `KV_REST_API_URL` e `KV_REST_API_TOKEN` nos ambientes de prévia.
-3. Gere uma chave Fernet e cadastre o resultado como variável sensível
-   `SESSION_ENCRYPTION_KEY` somente na Vercel:
+### Demo, prévias e produção
 
-   ```sh
-   python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-   ```
+O código aprovado entra em `main` por PR e dispara o deploy de produção.
+Depois dos checks, o CI sincroniza `demo` com o mesmo commit e a Vercel publica
+a demonstração. Desenvolva em branches `feat/`, `fix/` ou `chore/` criadas a
+partir de `origin/main`.
 
-4. Confirme que `VERCEL_URL`, variável de sistema da Vercel, está disponível para
-   as funções. Crie uma implantação de prévia sem promover para produção.
-5. Não habilite recarga automática, plano pago nem cobrança por excedentes para
-   cumprir o limite deste ticket.
+Configure `APP_MODE=demo` no ambiente Preview da Vercel, para todas as branches.
+As prévias e a demo usam turmas fictícias, sem Redis ou acesso ao SIGAA. Entre
+com usuário `demo` e senha `demo`. O alias fixo da demonstração fica em
+`APP_HOST`, limitado à branch `demo` no ambiente Preview.
 
-Antes de cadastrar os segredos, a API deve responder 503 sem citar a configuração
-ausente:
+Production usa `main`, com as variáveis de Redis e a chave de sessão somente
+nesse ambiente. Não configure `APP_MODE=demo` em Production. O código recusa
+essa combinação e responde 503 se a configuração de produção estiver ausente.
 
-```sh
-python3 scripts/check_preview.py --sem-configuracao https://URL-DA-PREVIA
-```
-
-Depois de conectar o Redis, cadastrar a chave e gerar outra prévia, execute:
-
-```sh
-python3 scripts/check_preview.py https://URL-DA-PREVIA
-```
-
-O verificador carrega a interface, consulta o estado sem sessão, testa os headers,
-os corpos JSON, a origem e o limite de login. Ele usa somente corpos inválidos e
-nunca envia usuário ou senha ao SIGAA. A execução consome as seis tentativas do IP
-do verificador; aguarde quinze minutos antes de tentar um login manual pelo mesmo
-IP.
+Consulte [RUNBOOK.md](RUNBOOK.md) para publicação, verificação dos dois ambientes
+e recuperação de falhas de sincronização.
 
 ## Produção
 
@@ -160,7 +146,7 @@ público `ju-caju/proj-matriculas` dispara os deploys de produção.
 Para reproduzir a configuração:
 
 1. Importe o repositório na Vercel com o preset `Other`.
-2. Crie um banco Upstash Redis no plano Free e conecte-o a Production e Preview.
+2. Crie um banco Upstash Redis no plano Free e conecte-o somente a Production.
    Use o prefixo `KV_REST_API` e marque as variáveis como secretas. Confirme a
    criação de `KV_REST_API_URL` e `KV_REST_API_TOKEN`.
 3. Gere uma chave Fernet e salve-a como segredo `SESSION_ENCRYPTION_KEY`. Nunca
