@@ -4,7 +4,6 @@ import argparse
 import re
 import subprocess
 
-
 SUBJECT = re.compile(
     r"^(?:feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)"
     r"(?:\([a-z0-9][a-z0-9._/-]*\))?!?: [a-záàâãéêíóôõúç][^\n]*[^.\s]$"
