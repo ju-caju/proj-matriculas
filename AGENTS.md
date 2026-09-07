@@ -7,6 +7,15 @@
   locais que já existiam.
 - Abra PR para `main`. Não desenvolva nem faça commits diretamente em `main`
   ou `demo`.
+- Escreva commits no padrão Conventional Commits, com a descrição em português:
+  `tipo(escopo opcional): descrição`. Use `feat`, `fix`, `docs`, `style`,
+  `refactor`, `perf`, `test`, `build`, `ci`, `chore` ou `revert`. Comece a
+  descrição com letra minúscula, use o infinitivo quando couber e não termine
+  com ponto. Exemplos: `feat: adicionar filtro de turno` e
+  `fix(grade): corrigir conflito entre horários`.
+- Mantenha cada commit focado em uma mudança. Explique contexto adicional no
+  corpo quando o título não bastar. Use `!` e um rodapé `BREAKING CHANGE:` para
+  mudanças incompatíveis.
 - `main` contém o código aprovado e dispara o deploy de produção na Vercel.
   Após os checks de `main`, o CI avança `demo` para o mesmo commit, disparando
   a publicação da demonstração. A sincronização nunca usa force push.

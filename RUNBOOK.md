@@ -38,6 +38,10 @@ Crie branches `feat/`, `fix/` ou `chore/` a partir de `origin/main` e abra PR
 para `main`. Cada PR executa CI e CodeQL e recebe uma prévia com dados fictícios.
 O merge depende dos checks e da conferência da prévia.
 
+O CI também verifica os títulos dos commits do PR. Use Conventional Commits com
+a descrição em português, por exemplo `fix: corrigir aviso de conflito`. O
+formato completo e os tipos aceitos estão em [AGENTS.md](AGENTS.md).
+
 `main` é a branch de produção da Vercel. O merge dispara seu deploy e uma nova
 execução do CI. Quando os checks de `main` passam, o job `Sincronizar demo`
 executa `scripts/sync_demo.sh` e avança a branch `demo` para o mesmo SHA. O push
