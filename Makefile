@@ -21,6 +21,7 @@ test:
 	node frontend/plan-store.test.js
 	node frontend/api-client.test.js
 	node frontend/course-filter.test.js
+	node frontend/shared-plan.test.js
 
 coverage:
 	uv run coverage run -m unittest discover

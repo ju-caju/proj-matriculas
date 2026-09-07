@@ -69,6 +69,8 @@ class FakeBackend(http.server.BaseHTTPRequestHandler):
                 "text/javascript",
             ),
             "/frontend/grade-image.js": ("frontend/grade-image.js", "text/javascript"),
+            "/frontend/shared-plan.js": ("frontend/shared-plan.js", "text/javascript"),
+            "/frontend/share-ui.js": ("frontend/share-ui.js", "text/javascript"),
             "/style.css": ("style.css", "text/css"),
         }
         if self.path not in files:
@@ -212,6 +214,285 @@ class DevTools:
 
 @unittest.skipUnless(shutil.which("google-chrome"), "Google Chrome não está instalado")
 class BrowserFlowTest(unittest.TestCase):
+    def check_sharing(self, page):
+        def run(script):
+            return page.evaluate(script, True)
+
+        def click(selector):
+            run(f"document.querySelector({json.dumps(selector)}).click()")
+
+        def text(selector):
+            return run(f"document.querySelector({json.dumps(selector)}).textContent")
+
+        def wait(expression):
+            self.assertTrue(
+                run(
+                    "(async()=>{for(let i=0;i<100;i++){if("
+                    + expression
+                    + ")return true;await new Promise(r=>setTimeout(r,30));}return false})()"
+                ),
+                run("document.body.innerText"),
+            )
+
+        def capture(name):
+            directory = os.environ.get("BROWSER_ARTIFACT_DIR")
+            if not directory:
+                return
+            Path(directory).mkdir(parents=True, exist_ok=True)
+            for width, height in [(1280, 900), (390, 844)]:
+                page.command(
+                    "Emulation.setDeviceMetricsOverride",
+                    {
+                        "width": width,
+                        "height": height,
+                        "deviceScaleFactor": 1,
+                        "mobile": False,
+                    },
+                )
+                shot = page.command("Page.captureScreenshot", {"format": "png"})
+                (Path(directory) / f"{name}-{width}.png").write_bytes(
+                    base64.b64decode(shot["data"])
+                )
+            page.command("Emulation.clearDeviceMetricsOverride")
+
+        original = run("JSON.stringify({...localStorage})")
+        click("#new-commitment")
+        run(
+            "document.querySelector('#commitment-name').value='Reunião';document.querySelector('[name=day][value=\"2\"]').checked=true;document.querySelector('[name=slot][value=M3]').checked=true;document.querySelector('#commitment-form').requestSubmit()"
+        )
+        author_id = run(
+            "PlanStore.createPlanStore({key:Schedule.key}).load('2026.2').find(item=>item.nome==='Reunião').id"
+        )
+        run(
+            "Object.defineProperty(navigator,'share',{configurable:true,value:undefined})"
+        )
+        click("#share-plan")
+        self.assertTrue(run("document.querySelector('#native-share').hidden"))
+        self.assertFalse(run("document.querySelector('#share-commitments').checked"))
+        self.assertIn("1 turma · 0 compromissos", text("#share-count"))
+        click("#generate-share")
+        course_link = run("document.querySelector('#share-link').value")
+        self.assertIn("#grade=", course_link)
+        self.assertEqual(
+            1,
+            run(
+                "SharedPlan.decode(new URL(document.querySelector('#share-link').value).hash).items.length"
+            ),
+        )
+        click("#share-commitments")
+        self.assertEqual("", run("document.querySelector('#share-link').value"))
+        self.assertIn("1 turma · 2 compromissos", text("#share-count"))
+        click("#generate-share")
+        link = run("document.querySelector('#share-link').value")
+        capture("compartilhar")
+        run(
+            "Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async()=>{throw Error('denied')}}})"
+        )
+        click("#copy-share-link")
+        wait("document.querySelector('#share-error').textContent.includes('Copie')")
+        self.assertEqual(link, run("document.querySelector('#share-link').value"))
+        run(
+            "Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value=>{window.copiedLink=value}}})"
+        )
+        click("#copy-share-link")
+        wait("document.querySelector('#share-error').textContent==='Link copiado.'")
+        self.assertEqual(link, run("window.copiedLink"))
+        run(
+            "Object.defineProperty(navigator,'share',{configurable:true,value:async data=>{window.sharedWithSystem=data.url}})"
+        )
+        click("#close-share")
+        click("#share-plan")
+        click("#share-commitments")
+        click("#generate-share")
+        self.assertFalse(run("document.querySelector('#native-share').hidden"))
+        click("#native-share")
+        wait("window.sharedWithSystem===document.querySelector('#share-link').value")
+        run(
+            "Object.defineProperty(navigator,'share',{configurable:true,value:async()=>{throw Error('unavailable')}})"
+        )
+        click("#native-share")
+        wait(
+            "document.querySelector('#share-error').textContent.includes('Use Copiar link')"
+        )
+        click("#close-share")
+
+        # Keep an existing duplicate and a new conflicting local item in the
+        # destination period; leave a different period selected before opening.
+        run(
+            "PlanStore.createPlanStore({key:Schedule.key}).save('2026.2',[{type:'commitment',id:'local-work',nome:'  TRABALHO ',periodo:'2026.2',horario:'4M2 2M2'},{type:'commitment',id:'local-new',nome:'Atividade local',periodo:'2026.2',horario:'2M3'}])"
+        )
+        run(
+            "document.querySelector('[name=period]').value='1';document.querySelector('#query-form').requestSubmit()"
+        )
+        wait("!document.querySelector('#query-form button').disabled")
+        click("#logout")
+        wait("!document.querySelector('#login-panel').hidden")
+        before = run("JSON.stringify({...localStorage})")
+        page.command("Network.enable")
+        page.events.clear()
+        run(f"location.hash=new URL({json.dumps(link)}).hash")
+        wait("document.querySelector('#shared-view')?.hidden===false")
+        page.command("Page.reload")
+        time.sleep(0.5)
+        wait("document.querySelector('#shared-view')?.hidden===false")
+        self.assertIn("2026.2", text("#plan-title"))
+        self.assertIn("fotografia", text("#shared-view"))
+        self.assertIn("SIGAA", text("#shared-view"))
+        self.assertIn("Trabalho", text("#selected-list"))
+        self.assertIn("Presencial", text("#selected-list"))
+        self.assertIn("REGULAR", text("#selected-list"))
+        self.assertNotIn("10 vagas", text("#selected-list"))
+        self.assertIn("choque", text("#conflict-status"))
+        capture("grade-publica")
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        self.assertEqual(
+            0, run("document.querySelectorAll('#selected-list button').length")
+        )
+        self.assertFalse(
+            run("document.querySelector('#calendar .class-block').draggable")
+        )
+        requests = [
+            event["params"]["request"]
+            for event in page.events
+            if event["method"] == "Network.requestWillBeSent"
+        ]
+        self.assertFalse(
+            any("/api/units" in r["url"] or "/api/turmas" in r["url"] for r in requests)
+        )
+        self.assertFalse(any("grade=" in r.get("postData", "") for r in requests))
+        self.assertFalse(any("#" in r["url"] for r in requests if "/api/" in r["url"]))
+
+        # Starting independently neither imports items nor requires login.
+        click("#shared-home")
+        wait("!location.hash && !document.querySelector('#login-panel').hidden")
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        run(f"location.hash=new URL({json.dumps(link)}).hash")
+        wait("!document.querySelector('#shared-view').hidden")
+
+        click("#copy-shared")
+        wait("!document.querySelector('#login-panel').hidden")
+        self.assertEqual(
+            new_hash := urllib.parse.urlparse(link).fragment,
+            run("location.hash.slice(1)"),
+        )
+        run(
+            "document.querySelector('[name=username]').value='fake-user';document.querySelector('[name=password]').value='fake-password';document.querySelector('#login-form').requestSubmit()"
+        )
+        wait("document.querySelector('#merge-dialog').open")
+        self.assertEqual(new_hash, run("location.hash.slice(1)"))
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        self.assertIn("1 turma · 1 compromisso", text("#merge-additions"))
+        self.assertIn("0 turmas · 1 compromisso", text("#merge-duplicates"))
+        self.assertIn("choque", text("#merge-conflicts"))
+        capture("previa-copia")
+        click("#cancel-merge")
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        click("#copy-shared")
+        wait("document.querySelector('#merge-dialog').open")
+        # Session loss between preview and confirmation must return to login.
+        run("document.cookie='session=; Path=/; Max-Age=0'")
+        click("#confirm-merge")
+        wait("!document.querySelector('#login-panel').hidden")
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        run(
+            "document.querySelector('[name=password]').value='fake-password';document.querySelector('#login-form').requestSubmit()"
+        )
+        wait("document.querySelector('#merge-dialog').open")
+        run(
+            "window.originalSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw Error('quota')}"
+        )
+        click("#confirm-merge")
+        wait(
+            "document.querySelector('#merge-error').textContent.includes('Não foi possível salvar')"
+        )
+        self.assertEqual(before, run("JSON.stringify({...localStorage})"))
+        self.assertTrue(run("document.querySelector('#merge-dialog').open"))
+        run("Storage.prototype.setItem=window.originalSetItem")
+        click("#confirm-merge")
+        wait("!document.querySelector('#merge-dialog').open")
+        self.assertIn("2026.2", text("#plan-title"))
+        self.assertIn("Atividade local", text("#selected-list"))
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertIn("ignorado", text("#status"))
+        self.assertEqual(
+            4,
+            run("PlanStore.createPlanStore({key:Schedule.key}).load('2026.2').length"),
+        )
+        self.assertNotEqual(
+            author_id,
+            run(
+                "PlanStore.createPlanStore({key:Schedule.key}).load('2026.2').find(item=>item.nome==='Reunião').id"
+            ),
+        )
+        run(f"location.hash=new URL({json.dumps(link)}).hash")
+        wait("!document.querySelector('#shared-view').hidden")
+        click("#copy-shared")
+        wait("document.querySelector('#merge-dialog').open")
+        self.assertIn("0 turmas · 0 compromissos", text("#merge-additions"))
+        click("#confirm-merge")
+        wait("!document.querySelector('#merge-dialog').open")
+        self.assertEqual(
+            4,
+            run("PlanStore.createPlanStore({key:Schedule.key}).load('2026.2').length"),
+        )
+
+        click('[aria-label="Editar Reunião"]')
+        run(
+            "document.querySelector('#commitment-name').value='Reunião revisada';document.querySelector('#commitment-form').requestSubmit()"
+        )
+        click("#share-plan")
+        click("#share-commitments")
+        click("#generate-share")
+        self.assertIn(
+            "Reunião revisada",
+            run(
+                "SharedPlan.decode(new URL(document.querySelector('#share-link').value).hash).items.map(item=>item.nome).join(' ')"
+            ),
+        )
+        click("#close-share")
+        click('[aria-label="Remover Reunião revisada Compromisso pessoal"]')
+        self.assertNotIn("Reunião", text("#selected-list"))
+
+        run("location.hash='#grade=invalid'")
+        wait("!document.querySelector('#shared-error').hidden")
+        self.assertEqual("", text("#selected-list"))
+        click("#shared-error-home")
+        wait("!location.hash")
+        # Untrusted text is displayed literally, even when it resembles HTML.
+        run(
+            "location.hash=SharedPlan.encode('2026.2',[{type:'commitment',nome:'<img src=x onerror=alert(1)>',periodo:'2026.2',horario:'2M2'}],true)"
+        )
+        wait("!document.querySelector('#shared-view').hidden")
+        self.assertIn("<img src=x onerror=alert(1)>", text("#selected-list"))
+        self.assertEqual(0, run("document.querySelectorAll('#shared-view img').length"))
+        click("#shared-home")
+        # A grade consisting only of commitments requires explicit inclusion.
+        run(
+            "PlanStore.createPlanStore({key:Schedule.key}).save('2026.2',[{type:'commitment',id:'only',nome:'Só compromisso',periodo:'2026.2',horario:'2M2'}])"
+        )
+        page.command("Page.reload")
+        time.sleep(0.5)
+        wait("!document.querySelector('#query-panel').hidden")
+        click("#share-plan")
+        click("#generate-share")
+        self.assertIn("Inclua compromissos", text("#share-error"))
+        self.assertTrue(run("document.querySelector('#share-result').hidden"))
+        click("#share-commitments")
+        click("#generate-share")
+        self.assertIn("#grade=", run("document.querySelector('#share-link').value"))
+        click("#close-share")
+        click("#clear-plan")
+        self.assertTrue(run("document.querySelector('#share-plan').disabled"))
+        # Restore the author plan for the existing commitment/edit/export flow.
+        run(
+            f"localStorage.clear();Object.entries(JSON.parse({json.dumps(original)})).forEach(([key,value])=>localStorage.setItem(key,value))"
+        )
+        page.command("Page.reload")
+        time.sleep(0.5)
+        wait("!document.querySelector('#query-panel').hidden")
+        run("document.querySelector('#query-form').requestSubmit()")
+        wait("!!document.querySelector('#courses article')")
+
     def check_commitments(self, page, download_dir):
         def click(text):
             page.evaluate(
@@ -528,6 +809,7 @@ class BrowserFlowTest(unittest.TestCase):
                     True,
                 )
             )
+            self.check_sharing(devtools)
             self.check_commitments(devtools, profile.name)
             devtools.evaluate("document.querySelector('#logout').click()")
             time.sleep(0.5)

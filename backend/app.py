@@ -370,6 +370,8 @@ def create_app(
             "api-client.js",
             "course-filter.js",
             "grade-image.js",
+            "shared-plan.js",
+            "share-ui.js",
         }:
             return _error(404, "Arquivo não encontrado.")
         return static_file("frontend/" + filename, "text/javascript")
