@@ -17,6 +17,18 @@ test('link contém fotografia das turmas e exclui compromissos e campos privados
   assert.equal(SharedPlan.decode(fragment).items[0].turma, '01');
 });
 
+test('gera formato compacto e continua lendo links da versão anterior', () => {
+  const items = [course, { ...course, disciplina: 'FÍSICA', turma: '02' }, commitment];
+  const fragment = SharedPlan.encode('2026.2', items, true);
+  const oldFragment = rawFragment({ version: 1, periodo: '2026.2', items: items.map(item => item.type === 'commitment'
+    ? { type: item.type, nome: item.nome, periodo: item.periodo, horario: item.horario }
+    : Object.fromEntries(['disciplina', 'periodo', 'turma', 'docente', 'tipo', 'forma', 'horario', 'local'].map(field => [field, item[field]]))) });
+
+  assert.ok(fragment.length < oldFragment.length * 0.6, `${fragment.length} não reduziu suficientemente ${oldFragment.length}`);
+  assert.deepEqual(SharedPlan.decode(fragment), SharedPlan.decode(oldFragment));
+  assert.equal(JSON.parse(Buffer.from(fragment.slice('#grade='.length), 'base64url'))[0], 2);
+});
+
 test('prévia preserva a grade, separa duplicatas e cria identidades locais apenas para novos compromissos', () => {
   const local = [course, { ...commitment, id: 'local', nome: '  ESTÁGIO  ', horario: '4M2 2M2' }];
   const otherName = { ...commitment, nome: 'Trabalho' };
@@ -68,6 +80,9 @@ test('valida a grade inteira na geração e leitura, com limites e contrato fech
   }
   for (const fragment of ['#other=abc', '#grade=', '#grade=!!!', '#grade=a', '#grade=ew', '#grade=_w', rawFragment(good).slice(0,-5), '#grade='+'a'.repeat(16000)]) {
     assert.throws(() => SharedPlan.decode(fragment));
+  }
+  for (const value of [[2, '2026.2'], [2, '2026.2', {}], [2, '2026.2', [[0]]], [2, '2026.2', [[1, 'Nome', '2M2', 'extra']]], [3, '2026.2', []]]) {
+    assert.throws(() => SharedPlan.decode(rawFragment(value)));
   }
   assert.throws(() => SharedPlan.encode('2026.2', [commitment]), /compromissos/i);
   assert.equal(SharedPlan.decode(SharedPlan.encode('2026.2', [commitment], true)).items.length, 1);

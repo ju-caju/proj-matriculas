@@ -6,6 +6,7 @@
   const COURSE_FIELDS = ['disciplina', 'periodo', 'turma', 'docente', 'tipo', 'forma', 'horario', 'local'];
   const COMMITMENT_FIELDS = ['type', 'nome', 'periodo', 'horario'];
   const PREFIX = '#grade=';
+  const COMPACT_VERSION = 2;
   const LIMITS = Object.freeze({ items: 40, field: 240, horario: 1000, fragment: 16000 });
   const invalid = () => new Error('Link de grade inválido. Confira o link completo ou volte ao início.');
   const tooLarge = () => new Error('A grade excede o limite do link. Reduza os itens ou o tamanho dos campos.');
@@ -52,7 +53,27 @@
       .filter(item => includeCommitments || item.type !== 'commitment')
       .map(item => Object.fromEntries((item.type === 'commitment' ? COMMITMENT_FIELDS : COURSE_FIELDS)
         .map(field => [field, item[field]]))) };
-    return serialize(validate(snapshot));
+    validate(snapshot);
+    const compact = [COMPACT_VERSION, periodo, snapshot.items.map(item => item.type === 'commitment'
+      ? [1, item.nome, item.horario]
+      : [0, item.disciplina, item.turma, item.docente, item.tipo, item.forma, item.horario, item.local])];
+    return serialize(compact);
+  }
+
+  function expandCompact(value) {
+    if (!Array.isArray(value) || value.length !== 3 || value[0] !== COMPACT_VERSION || !Array.isArray(value[2])) throw invalid();
+    const periodo = value[1];
+    return { version: 1, periodo, items: value[2].map(item => {
+      if (!Array.isArray(item)) throw invalid();
+      if (item[0] === 0 && item.length === 8) {
+        return {
+          disciplina: item[1], periodo, turma: item[2], docente: item[3], tipo: item[4],
+          forma: item[5], horario: item[6], local: item[7],
+        };
+      }
+      if (item[0] === 1 && item.length === 3) return { type: 'commitment', nome: item[1], periodo, horario: item[2] };
+      throw invalid();
+    }) };
   }
 
   function decode(fragment) {
@@ -64,7 +85,8 @@
     try {
       const binary = atob(payload.replaceAll('-', '+').replaceAll('_', '/'));
       if (btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '') !== payload) throw invalid();
-      plan = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, char => char.charCodeAt(0))));
+      const value = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(binary, char => char.charCodeAt(0))));
+      plan = Array.isArray(value) ? expandCompact(value) : value;
     } catch { throw invalid(); }
     return validate(plan);
   }
