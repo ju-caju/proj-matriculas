@@ -15,6 +15,8 @@ STATIC_FILES = {
     "frontend/api-client.js",
     "frontend/course-filter.js",
     "frontend/grade-image.js",
+    "frontend/shared-plan.js",
+    "frontend/share-ui.js",
 }
 LOCAL_REFERENCE = re.compile(r'(?:src|href)="(/[^"#?]+)"')
 

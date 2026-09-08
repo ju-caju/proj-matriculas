@@ -5,7 +5,7 @@
   else root.PlanStore = api;
 })(globalThis, function () {
   function createPlanStore({ storage, key }) {
-    const readStorage = storage || globalThis.localStorage;
+    const readStorage = () => storage || globalThis.localStorage;
     const courseKey = key || (value => JSON.stringify([
       value.periodo,
       value.disciplina,
@@ -30,7 +30,7 @@
 
     function load(semester) {
       try {
-        const parsed = JSON.parse(readStorage.getItem('ufpb-plan:' + semester) || '[]');
+        const parsed = JSON.parse(readStorage().getItem('ufpb-plan:' + semester) || '[]');
         if (!Array.isArray(parsed)) return [];
         const unique = new Map();
         for (const value of parsed) {
@@ -44,7 +44,7 @@
 
     function save(semester, values) {
       try {
-        readStorage.setItem('ufpb-plan:' + semester, JSON.stringify(
+        readStorage().setItem('ufpb-plan:' + semester, JSON.stringify(
           values.filter(value => valid(value) && value.periodo === semester)
         ));
         return true;
@@ -56,5 +56,5 @@
     return { load, save };
   }
 
-  return { createPlanStore };
+  return { createPlanStore, SAVE_ERROR: 'Não foi possível salvar. Mantenha esta aba aberta.' };
 });

@@ -86,3 +86,48 @@ turmas. Conflitos avisam sem impedir o cadastro. Limpar a grade apaga os dois
 tipos de item somente no semestre selecionado. Os testes de navegador usam
 backend fictício; `BROWSER_ARTIFACT_DIR` permite guardar os PNGs baixados para
 inspeção visual.
+
+## Compartilhamento por link
+
+`frontend/shared-plan.js` oferece `encode`, `decode`, `validate`, `compare` e
+`merge`. A fotografia da grade usa JSON UTF-8 codificado em base64url no
+fragmento `#grade=`, com `version: 1`, `periodo` e `items`. O fragmento da URL
+não integra a requisição HTTP nem o Referer. A aplicação não o envia em chamadas
+à API, logs ou métricas. Não há endpoint de compartilhamento ou armazenamento
+de grades no servidor, e abrir ou copiar um link não consulta turmas no SIGAA.
+
+O contrato contém somente disciplina, período, turma, docente, tipo, forma,
+horário e local. Para compromissos, contém `type: "commitment"`, nome, período
+e horário, sem a identidade local do autor. Situação, vagas, identificação do
+autor e campos extras não entram na projeção. A revisão exclui compromissos
+por padrão e mostra os itens antes da geração. Qualquer pessoa com o link pode
+consultá-lo indefinidamente; não há revogação, assinatura ou atualização.
+
+Geração e leitura validam o contrato inteiro. São permitidos de 1 a 40 itens,
+campos de até 240 unidades UTF-16, horário de até 1.000 unidades e fragmento
+final de até 16.000 caracteres, incluindo `#grade=`. O período deve ter a forma
+`20AA.P`, com `P` entre 0 e 4, e ser o mesmo em todos os itens. Horários usam
+o parser público de `Schedule`; compromissos aceitam somente blocos semanais
+sem datas. Controles de texto, campos extras, tipos incorretos, codificação
+inválida e versões desconhecidas invalidam todo o link. Nenhum item é exibido
+antes dessa validação. Textos são inseridos por `textContent`, nunca como HTML.
+
+`frontend/share-ui.js` mantém a visualização pública e a intenção de cópia
+durante o login. A visualização reutiliza a semana e os detalhes em modo de
+consulta, sem alterar o planejamento local. A sessão é verificada antes da
+prévia e novamente ao confirmar. O login sozinho não importa itens.
+
+A prévia compara o link com o armazenamento do período compartilhado e mostra
+itens novos, duplicatas e choques da união calculados por `Schedule.conflicts`.
+Turmas usam `Schedule.key`. Compromissos usam período, nome normalizado em NFC,
+sem diferenças de caixa ou espaços, e o conjunto ordenado dos blocos semanais.
+Na confirmação, os compromissos novos recebem UUIDs locais e horários no mesmo
+formato do editor. Se outra aba alterar a grade durante a prévia, é necessário
+revisar a comparação atualizada antes de confirmar novamente.
+
+Uma única chamada a `PlanStore.save` grava a união. A interface só troca a
+grade em memória depois do sucesso; uma falha de gravação preserva a grade
+anterior e mantém a prévia aberta com o aviso existente. Choques não bloqueiam
+a cópia. O sucesso abre o período compartilhado e informa as contagens de
+itens adicionados e ignorados. Essas operações mantêm as decisões dos ADRs
+existentes, sem acrescentar identidade, colaboração ou persistência no backend.

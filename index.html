@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minha grade · UFPB</title><link rel="stylesheet" href="/style.css"><script src="/schedule.js" defer></script><script src="/frontend/dom.js" defer></script><script src="/frontend/plan-store.js" defer></script><script src="/frontend/api-client.js" defer></script><script src="/frontend/course-filter.js" defer></script><script src="/frontend/grade-image.js" defer></script><script src="/app.js" defer></script></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Minha grade · UFPB</title><link rel="stylesheet" href="/style.css"><script src="/schedule.js" defer></script><script src="/frontend/dom.js" defer></script><script src="/frontend/plan-store.js" defer></script><script src="/frontend/api-client.js" defer></script><script src="/frontend/course-filter.js" defer></script><script src="/frontend/grade-image.js" defer></script><script src="/frontend/shared-plan.js" defer></script><script src="/frontend/share-ui.js" defer></script><script src="/app.js" defer></script></head>
 <body>
 <header><strong>Minha grade · UFPB</strong><button id="logout" class="secondary" hidden>Sair</button></header>
 <main>
@@ -27,7 +27,7 @@
 <div class="planner">
 <aside class="catalog" aria-label="Turmas disponíveis"><div class="remove-hint">Solte aqui ou fora da grade para remover o item</div><h2 id="count">Turmas disponíveis</h2><div class="catalog-filters"><label>Buscar turma<input id="filter" type="search" placeholder="Disciplina, docente ou horário"></label><label>Turno<select id="shift-filter"><option value="">Todos os turnos</option><option value="morning">Manhã</option><option value="afternoon">Tarde</option><option value="evening">Noite</option></select></label></div><p id="empty">Faça uma consulta para ver as turmas.</p><div id="courses" class="course-list"></div></aside>
 <section class="week-panel" aria-label="Planejamento semanal">
-<div class="week-heading"><div><h2 id="plan-title">Minha semana · 2026.2</h2><p id="plan-count">Nenhuma turma selecionada</p></div><div class="week-actions"><button id="new-commitment" class="secondary">Adicionar compromisso</button><button id="export-plan" disabled>Baixar imagem</button><button id="clear-plan" class="secondary" disabled>Limpar grade</button></div></div>
+<div class="week-heading"><div><h2 id="plan-title">Minha semana · 2026.2</h2><p id="plan-count">Nenhuma turma selecionada</p></div><div class="week-actions"><button id="new-commitment" class="secondary">Adicionar compromisso</button><button id="share-plan" disabled>Compartilhar</button><button id="export-plan" disabled>Baixar imagem</button><button id="clear-plan" class="secondary" disabled>Limpar grade</button></div></div>
 <div id="conflict-status" class="conflict-status" role="status" aria-live="polite">Adicione uma turma para começar.</div>
 <div id="calendar-drop" class="calendar-drop" aria-label="Solte uma turma para adicioná-la aos horários oficiais"><div id="drop-hint">Solte aqui para adicionar nos dias e horários da turma</div><div class="calendar-scroll"><div id="calendar" class="calendar"></div></div></div>
 <p class="calendar-note">Planejamento local, sem efetuar matrícula. <a href="https://www.ufpb.br/aci/alteracao-de-plano-de-estudos/" target="_blank" rel="noopener">Horários da UFPB</a> · N1 começa às 19h.</p>
@@ -36,6 +36,32 @@
 <p id="save-note" class="calendar-note">Sua grade fica salva neste navegador, separada por semestre.</p>
 </section></div>
 </section>
+<section id="shared-view" hidden>
+<h1>Planejamento compartilhado</h1>
+<p>Esta grade é uma fotografia estática. Docente, local e horário podem ter mudado. Confira os dados e a matrícula no SIGAA. Este planejamento não é informação oficial nem efetua matrícula.</p>
+<div class="week-actions"><button id="copy-shared">Copiar para minha grade</button><button id="shared-home" class="secondary">Montar minha própria grade</button></div>
+<div id="shared-week"></div>
+</section>
+<section id="shared-error" hidden><h1>Não foi possível abrir a grade</h1><p id="shared-error-message" role="alert"></p><button id="shared-error-home">Voltar ao início</button></section>
+<dialog id="share-dialog" aria-labelledby="share-title">
+<h2 id="share-title">Compartilhar grade</h2>
+<p id="share-period"></p>
+<label><input id="share-commitments" type="checkbox"> Incluir compromissos pessoais</label>
+<p id="share-count"></p><ul id="share-items"></ul>
+<p>Qualquer pessoa com o link poderá abrir esta fotografia da grade, sem login. O link não expira e não pode ser revogado. Seu nome e matrícula não serão incluídos.</p>
+<button id="generate-share">Gerar link</button>
+<div id="share-result" hidden><label>Link da grade<textarea id="share-link" readonly rows="3"></textarea></label><div class="week-actions"><button id="native-share">Compartilhar pelo dispositivo</button><button id="copy-share-link">Copiar link</button></div></div>
+<p id="share-error" role="status"></p><button id="close-share" class="secondary">Fechar</button>
+</dialog>
+<dialog id="merge-dialog" aria-labelledby="merge-title">
+<h2 id="merge-title">Revisar cópia da grade</h2><p id="merge-period"></p>
+<h3>Itens novos</h3><p id="merge-additions"></p><ul id="merge-new-list"></ul>
+<h3>Itens já existentes, que serão ignorados</h3><p id="merge-duplicates"></p><ul id="merge-duplicate-list"></ul>
+<h3>Choques na grade após a cópia</h3><p id="merge-conflicts"></p><ul id="merge-conflict-list"></ul>
+<p>Os itens novos serão mesclados com sua grade. Você pode confirmar mesmo com choques.</p>
+<p id="merge-error" role="alert"></p>
+<div class="week-actions"><button id="confirm-merge">Confirmar cópia</button><button id="cancel-merge" class="secondary">Cancelar</button></div>
+</dialog>
 <dialog id="commitment-dialog" aria-labelledby="commitment-title">
 <form id="commitment-form">
 <h2 id="commitment-title">Novo compromisso pessoal</h2>

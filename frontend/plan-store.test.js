@@ -45,3 +45,15 @@ assert.equal(mixed.load('2027.1')[0].nome, 'Trabalho');
 const unavailable = createPlanStore({ storage: { getItem() { throw Error('denied'); }, setItem() { throw Error('quota'); } } });
 assert.deepEqual(unavailable.load('2026.2'), []);
 assert.equal(unavailable.save('2026.2', [commitment]), false);
+
+// Denying access to the storage property must not prevent public link viewing.
+const localStorageDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage');
+Object.defineProperty(globalThis, 'localStorage', { configurable: true, get() { throw Error('blocked'); } });
+try {
+  const blocked = createPlanStore({});
+  assert.deepEqual(blocked.load('2026.2'), []);
+  assert.equal(blocked.save('2026.2', [commitment]), false);
+} finally {
+  if (localStorageDescriptor) Object.defineProperty(globalThis, 'localStorage', localStorageDescriptor);
+  else delete globalThis.localStorage;
+}
