@@ -660,6 +660,192 @@ class BrowserFlowTest(unittest.TestCase):
         self.assertIn("choque", text("#status"))
         self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
 
+    def check_undo(self, page):
+        def run(script, await_promise=False):
+            return page.evaluate(script, await_promise)
+
+        def text(selector):
+            return run(f"document.querySelector({json.dumps(selector)}).textContent")
+
+        def fail_storage(action):
+            run(
+                "(()=>{const originalSet=Storage.prototype.setItem;"
+                "Storage.prototype.setItem=function(){throw new DOMException('Quota exceeded','QuotaExceededError')};"
+                f"{action};Storage.prototype.setItem=originalSet}})()"
+            )
+
+        def wait_for_query():
+            self.assertTrue(
+                run(
+                    "(async()=>{for(let i=0;i<50;i++){if(!document.querySelector('#query-form button').disabled)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                    True,
+                )
+            )
+
+        original = run("localStorage.getItem('ufpb-plan:2026.2')")
+        run("document.querySelector('#courses article button').click()")
+        self.assertIn("Turma DISCIPLINA DE TESTE removida", text("#status"))
+        self.assertEqual("Desfazer", text("#undo-plan"))
+        self.assertEqual("BUTTON", run("document.querySelector('#undo-plan').tagName"))
+        self.assertEqual(
+            "status", run("document.querySelector('#status').getAttribute('role')")
+        )
+        self.assertEqual(
+            "polite", run("document.querySelector('#status').getAttribute('aria-live')")
+        )
+        self.assertEqual("undo-plan", run("document.activeElement.id"))
+        run("document.querySelector('#undo-plan').click()")
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertEqual(original, run("localStorage.getItem('ufpb-plan:2026.2')"))
+        self.assertEqual("status", run("document.activeElement.id"))
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+
+        run(
+            "document.querySelector('[aria-label=\"Remover DISCIPLINA DE TESTE 01\"]').click()"
+        )
+        self.assertNotIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        run("document.querySelector('#undo-plan').click()")
+
+        run(
+            "document.querySelector('[aria-label=\"Remover Trabalho Compromisso pessoal\"]').click()"
+        )
+        self.assertIn("Compromisso Trabalho removido", text("#status"))
+        run("document.querySelector('#undo-plan').click()")
+        self.assertIn("Trabalho", text("#selected-list"))
+        self.assertEqual(original, run("localStorage.getItem('ufpb-plan:2026.2')"))
+
+        run("document.querySelector('#clear-plan').click()")
+        self.assertIn("Grade limpa", text("#status"))
+        self.assertEqual("undo-plan", run("document.activeElement.id"))
+        run("document.querySelector('#undo-plan').click()")
+        self.assertEqual(original, run("localStorage.getItem('ufpb-plan:2026.2')"))
+        self.assertIn("1 turma · 1 compromisso", text("#selected-summary"))
+        self.assertIn("choque", text("#conflict-status"))
+
+        fail_storage("document.querySelector('#clear-plan').click()")
+        self.assertIn("1 turma · 1 compromisso", text("#selected-summary"))
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+
+        run("document.querySelector('#filter').focus()")
+        run(
+            "(()=>{const data=new DataTransfer(),block=document.querySelector('#calendar .class-block');"
+            "block.dispatchEvent(new DragEvent('dragstart',{bubbles:true,dataTransfer:data}));"
+            "document.body.dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:data}))})()"
+        )
+        self.assertEqual("filter", run("document.activeElement.id"))
+        self.assertNotIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertNotEqual(original, run("localStorage.getItem('ufpb-plan:2026.2')"))
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#undo-plan').click()")
+        self.assertEqual(original, run("localStorage.getItem('ufpb-plan:2026.2')"))
+
+        fail_storage("document.querySelector('#courses article button').click()")
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertIn("Não foi possível salvar", text("#status"))
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+
+        run("document.querySelector('#courses article button').click()")
+        fail_storage("document.querySelector('#undo-plan').click()")
+        self.assertNotIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        self.assertIn("Não foi possível salvar", text("#status"))
+        run("document.querySelector('#undo-plan').click()")
+        self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
+
+        run("document.querySelector('#courses article button').click()")
+        run(
+            "document.querySelector('#filter').value='teste';document.querySelector('#filter').dispatchEvent(new Event('input'))"
+        )
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#query-form').requestSubmit()")
+        wait_for_query()
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#export-plan').click()")
+        self.assertTrue(
+            run(
+                "(async()=>{for(let i=0;i<50;i++){if(document.querySelector('#status-message').textContent.includes('Imagem PNG'))return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                True,
+            )
+        )
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#courses article button').click()")
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+
+        run("document.querySelector('#courses article button').click()")
+        run(
+            "localStorage.setItem('ufpb-plan:2026.2',JSON.stringify(["
+            "{type:'commitment',id:'other-tab',nome:'Outra aba',periodo:'2026.2',horario:'3N1'}]));"
+            "document.querySelector('#undo-plan').click()"
+        )
+        self.assertIn("Outra aba", text("#selected-list"))
+        self.assertNotIn("DISCIPLINA DE TESTE", text("#selected-list"))
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+
+        run(f"localStorage.setItem('ufpb-plan:2026.2',{json.dumps(original)})")
+        page.command("Page.reload")
+        time.sleep(0.5)
+        self.assertTrue(
+            run(
+                "(async()=>{for(let i=0;i<50;i++){if(document.querySelector('#query-panel')?.hidden===false)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                True,
+            )
+        )
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#query-form').requestSubmit()")
+        wait_for_query()
+
+        run("document.querySelector('#courses article button').click()")
+        run(
+            "document.querySelector('[name=period]').value='1';document.querySelector('#query-form').requestSubmit()"
+        )
+        wait_for_query()
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+        run(
+            "document.querySelector('[name=period]').value='2';document.querySelector('#query-form').requestSubmit()"
+        )
+        wait_for_query()
+
+        run(f"localStorage.setItem('ufpb-plan:2026.2',{json.dumps(original)})")
+        page.command("Page.reload")
+        time.sleep(0.5)
+        run("document.querySelector('#query-form').requestSubmit()")
+        wait_for_query()
+        run("document.querySelector('#courses article button').click()")
+        run("location.hash=SharedPlan.encode('2026.2',[" + json.dumps(FAKE_ROW) + "])")
+        self.assertTrue(
+            run(
+                "(async()=>{for(let i=0;i<50;i++){if(!document.querySelector('#shared-view').hidden)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                True,
+            )
+        )
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#shared-home').click()")
+
+        run(f"localStorage.setItem('ufpb-plan:2026.2',{json.dumps(original)})")
+        run("document.querySelector('#courses article button').click()")
+        run("document.querySelector('#courses article button').click()")
+        self.assertFalse(run("document.querySelector('#undo-plan').hidden"))
+        run("document.querySelector('#logout').click()")
+        self.assertTrue(
+            run(
+                "(async()=>{for(let i=0;i<50;i++){if(!document.querySelector('#login-panel').hidden)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                True,
+            )
+        )
+        self.assertTrue(run("document.querySelector('#undo-plan').hidden"))
+        run(f"localStorage.setItem('ufpb-plan:2026.2',{json.dumps(original)})")
+        run(
+            "document.querySelector('[name=username]').value='fake-user';document.querySelector('[name=password]').value='fake-password';document.querySelector('#login-form').requestSubmit()"
+        )
+        self.assertTrue(
+            run(
+                "(async()=>{for(let i=0;i<50;i++){if(!document.querySelector('#query-panel').hidden)return true;await new Promise(r=>setTimeout(r,50));}return false})()",
+                True,
+            )
+        )
+        run("document.querySelector('#query-form').requestSubmit()")
+        wait_for_query()
+
     def test_login_query_plan_and_logout_with_fake_backend(self):
         server = ThreadingHTTPServer(("127.0.0.1", 0), FakeBackend)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -811,6 +997,7 @@ class BrowserFlowTest(unittest.TestCase):
                     "document.querySelectorAll('#calendar .class-block').length"
                 ),
             )
+            self.check_undo(devtools)
             devtools.evaluate("document.querySelector('#export-plan').click()")
             self.assertTrue(
                 devtools.evaluate(

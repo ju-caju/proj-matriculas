@@ -2,14 +2,19 @@ const { $, el, name, color } = FrontendDom;
 const S = Schedule;
 let rows = [], selected = [], semester = '2026.2', dragging = null, dragMode = null, busy = false;
 let viewingShared = false, isAuthenticated = false, homeSemester = semester;
+let undoAction = null;
 const planStore = PlanStore.createPlanStore({ key: S.key });
-function status(message,error=false){$('#status').textContent=message;$('#status').classList.toggle('error',error);}
-function save(){if(!planStore.save(semester,selected))$('#save-note').textContent=PlanStore.SAVE_ERROR;}
+const snapshot = values => JSON.parse(JSON.stringify(values));
+function status(message,error=false){$('#status-message').textContent=message;$('#status').classList.toggle('error',error);}
+function renderUndo(){const button=$('#undo-plan');button.hidden=!undoAction;}
+function invalidateUndo(){undoAction=null;renderUndo();}
+function save(){const saved=planStore.save(semester,selected);if(!saved)$('#save-note').textContent=PlanStore.SAVE_ERROR;return saved;}
 function loadPlan(){selected=planStore.load(semester);}
 function authenticated(value){isAuthenticated=value;if(sharing.active){$('#logout').hidden=!value;sharing.refresh();return;}$('#login-panel').hidden=value;$('#query-panel').hidden=!value;$('#logout').hidden=!value;if(value)loadPlan();else{rows=[];selected=[];}render();}
 const api = ApiClient.createApi({ onUnauthorized: () => authenticated(false) }).request;
-function remove(key){selected=selected.filter(r=>S.key(r)!==key);save();render();status('Item removido da grade.');}
-function add(key){const row=rows.find(r=>S.key(r)===key);if(!row||selected.some(r=>S.key(r)===key))return;if(row.periodo!==semester||S.parse(row.horario).errors.length){status('Confira o horário e o período desta turma.',true);return;}selected.push(row);save();render();const hits=S.conflicts(selected).filter(c=>S.key(c.a)===key||S.key(c.b)===key);status(hits.length?'Turma adicionada com choque. Confira os detalhes abaixo da grade.':'Turma adicionada: '+S.describe(row.horario),!!hits.length);}
+function reversibleChange(next,message,moveFocus){const before=snapshot(selected),after=snapshot(next);if(!planStore.save(semester,after)){status(PlanStore.SAVE_ERROR,true);return false;}selected=after;undoAction={semester,before,after};render();status(message);if(moveFocus)$('#undo-plan').focus();return true;}
+function remove(key,moveFocus=true){const row=selected.find(item=>S.key(item)===key);if(!row)return;const message=row.type==='commitment'?`Compromisso ${name(row)} removido.`:`Turma ${name(row)} removida.`;reversibleChange(selected.filter(item=>S.key(item)!==key),message,moveFocus);}
+function add(key){const row=rows.find(r=>S.key(r)===key);if(!row||selected.some(r=>S.key(r)===key))return;if(row.periodo!==semester||S.parse(row.horario).errors.length){status('Confira o horário e o período desta turma.',true);return;}selected.push(row);save();invalidateUndo();render();const hits=S.conflicts(selected).filter(c=>S.key(c.a)===key||S.key(c.b)===key);status(hits.length?'Turma adicionada com choque. Confira os detalhes abaixo da grade.':'Turma adicionada: '+S.describe(row.horario),!!hits.length);}
 function renderCatalog(){
  const visible=CourseFilter.filter(rows,$('#filter').value,$('#shift-filter').value,S);
  $('#count').textContent=`${visible.length} turma${visible.length===1?' disponível':'s disponíveis'}`;
@@ -63,10 +68,10 @@ function renderSelected(){
  $('#selected-summary').textContent=`Itens na grade (${S.counts(selected)}) · ${viewingShared?'detalhes':'detalhes e remoção'}`;
  $('#selected-list').replaceChildren(...selected.map(row=>{const item=el('article',undefined,'selected-course '+color(row));item.dataset.key=S.key(row);item.tabIndex=-1;const text=el('div');text.append(el('h3',name(row)+' · '+S.label(row)),el('p',S.describe(row.horario)),el('p',row.type==='commitment'?'Toda semana':`${row.docente} · ${row.local}`,'course-meta'),el('p',row.horario,'course-meta'));if(row.type!=='commitment')text.append(el('p',`Período ${row.periodo} · ${row.tipo||''} · ${row.forma||''}`,'course-meta'));if(viewingShared){item.append(text);return item;}const button=el('button','Remover','secondary');button.setAttribute('aria-label','Remover '+name(row)+' '+S.label(row));button.addEventListener('click',()=>remove(S.key(row)));item.append(text);if(row.type==='commitment'){const edit=el('button','Editar','secondary');edit.setAttribute('aria-label','Editar '+name(row));edit.addEventListener('click',()=>openCommitment(row));item.append(edit);}item.append(button);return item;}));
 }
-function render(){renderCatalog();renderCalendar();renderSelected();}
+function render(){renderCatalog();renderCalendar();renderSelected();renderUndo();}
 async function consult(){
  if(busy)return;busy=true;const filters=Object.fromEntries(new FormData($('#query-form'))),next=filters.year+'.'+filters.period;
- if(next!==semester){semester=next;loadPlan();}
+ if(next!==semester){semester=next;invalidateUndo();loadPlan();}
  $('#query-form button').disabled=true;status('Consultando o SIGAA…');rows=[];render();
  try{const result=await api('/api/turmas',filters);rows=result.rows;if(result.units.length){const select=$('[name="unit"]');select.replaceChildren(new Option('Todos os departamentos',''),...result.units.filter(u=>u.value&&u.value!=='0').map(u=>new Option(u.label,u.value)));select.value=filters.unit;}status(`Consulta concluída · ${filters.year}.${filters.period}. Sua grade foi mantida.`);}
  catch(error){status(error.message,true);}
@@ -75,11 +80,12 @@ async function consult(){
 $('#calendar-drop').addEventListener('dragover',event=>{if(dragging){event.preventDefault();event.dataTransfer.dropEffect=dragMode==='remove'?'move':'copy';}});
 $('#calendar-drop').addEventListener('drop',event=>{event.preventDefault();event.stopPropagation();const key=dragging,mode=dragMode;finishDrag();if(key&&mode==='add')add(key);else if(key)status('Item mantido no horário original.');});
 document.addEventListener('dragover',event=>{if(dragMode==='remove'&&!event.target.closest('#calendar-drop')){event.preventDefault();event.dataTransfer.dropEffect='move';}});
-document.addEventListener('drop',event=>{if(dragMode==='remove'&&!event.target.closest('#calendar-drop')){event.preventDefault();const key=dragging;finishDrag();remove(key);}});
-$('#clear-plan').addEventListener('click',()=>{selected=[];save();render();status('Grade limpa. Adicione turmas ou compromissos.');});
+document.addEventListener('drop',event=>{if(dragMode==='remove'&&!event.target.closest('#calendar-drop')){event.preventDefault();const key=dragging;finishDrag();remove(key,false);}});
+$('#clear-plan').addEventListener('click',()=>reversibleChange([], 'Grade limpa.', true));
+$('#undo-plan').addEventListener('click',()=>{if(!undoAction)return;const action=undoAction,current=planStore.load(action.semester);if(action.semester!==semester||JSON.stringify(current)!==JSON.stringify(action.after)){undoAction=null;selected=current;render();status('A grade foi alterada em outra aba. O planejamento mais recente foi carregado.',true);return;}if(!planStore.save(semester,action.before)){status(PlanStore.SAVE_ERROR,true);return;}selected=snapshot(action.before);undoAction=null;render();status('Planejamento restaurado.');$('#status').focus();});
 $('#login-form').addEventListener('submit',async event=>{event.preventDefault();const button=$('#login-form button');button.disabled=true;status('Entrando no SIGAA…');try{await api('/api/login',Object.fromEntries(new FormData(event.target)));$('[name="password"]').value='';authenticated(true);if(sharing.active)await sharing.afterLogin();else await loadUnits();}catch(error){status(error.message,true);}finally{$('[name="password"]').value='';button.disabled=false;}});
 $('#query-form').addEventListener('submit',event=>{event.preventDefault();consult();});$('#filter').addEventListener('input',renderCatalog);$('#shift-filter').addEventListener('change',renderCatalog);
-$('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{});authenticated(false);status('Você saiu. Sua grade permanece salva neste navegador.');}catch(error){status(error.message,true);}});
+$('#logout').addEventListener('click',async()=>{try{await api('/api/logout',{});invalidateUndo();authenticated(false);status('Você saiu. Sua grade permanece salva neste navegador.');}catch(error){status(error.message,true);}});
 
 
 async function loadUnits(){try{const result=await api('/api/units',{});const select=$('[name=unit]');select.replaceChildren(new Option('Todos os departamentos',''),...result.units.filter(u=>u.value&&u.value!=='0').map(u=>new Option(u.label,u.value)));$('#empty').textContent='Busque por disciplina ou professor para encontrar turmas.';status('Informe os nomes acima e clique em Consultar.');}catch(error){status(error.message,true);}}
@@ -152,7 +158,7 @@ $('#commitment-form').addEventListener('submit',event=>{
  }
  const row = {type:'commitment', id:editingCommitment?.id || crypto.randomUUID(), nome, periodo:semester, horario:[...codes].sort().join(' ')};
  selected = editingCommitment ? selected.map(item=>S.key(item)===S.key(editingCommitment)?row:item) : [...selected,row];
- save(); render(); $('#commitment-dialog').close();
+ save(); invalidateUndo(); render(); $('#commitment-dialog').close();
  const clash = S.conflicts(selected).some(c=>c.a===row||c.b===row);
  status(clash?'Compromisso salvo com choque. Confira os detalhes abaixo da grade.':'Compromisso salvo.',clash);
 });
@@ -164,6 +170,7 @@ const sharing = ShareUI.create({
  onAuthenticated: authenticated,
  onView(plan, error) {
   if (!viewingShared) homeSemester = semester;
+  invalidateUndo();
   viewingShared = true;
   $('#commitment-dialog').close(); finishDrag();
   $('#query-panel').hidden = true; $('#login-panel').hidden = true;
@@ -189,7 +196,7 @@ const sharing = ShareUI.create({
   $('[name=username]').focus();
  },
  onImported(periodo, items) {
-  semester = periodo; selected = items; rows = [];
+  invalidateUndo(); semester = periodo; selected = items; rows = [];
   const [year, period] = periodo.split('.');
   $('[name=year]').value = year; $('[name=period]').value = period;
   $('#save-note').textContent = 'Sua grade fica salva neste navegador, separada por semestre.';
