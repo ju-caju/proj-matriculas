@@ -693,6 +693,19 @@ class BrowserFlowTest(unittest.TestCase):
         self.assertEqual(
             "polite", run("document.querySelector('#status').getAttribute('aria-live')")
         )
+        self.assertEqual(
+            "fixed", run("getComputedStyle(document.querySelector('#status')).position")
+        )
+        self.assertTrue(
+            run(
+                "(()=>{const rect=document.querySelector('#status').getBoundingClientRect();return rect.top>=0&&rect.bottom<=innerHeight})()"
+            )
+        )
+        self.assertTrue(
+            run(
+                "document.querySelector('#status').classList.contains('undo-available')"
+            )
+        )
         self.assertEqual("undo-plan", run("document.activeElement.id"))
         run("document.querySelector('#undo-plan').click()")
         self.assertIn("DISCIPLINA DE TESTE", text("#selected-list"))
