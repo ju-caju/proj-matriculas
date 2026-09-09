@@ -6,7 +6,7 @@ let undoAction = null;
 const planStore = PlanStore.createPlanStore({ key: S.key });
 const snapshot = values => JSON.parse(JSON.stringify(values));
 function status(message,error=false){$('#status-message').textContent=message;$('#status').classList.toggle('error',error);}
-function renderUndo(){const button=$('#undo-plan');button.hidden=!undoAction;}
+function renderUndo(){const button=$('#undo-plan'),available=!!undoAction;button.hidden=!available;$('#status').classList.toggle('undo-available',available);}
 function invalidateUndo(){undoAction=null;renderUndo();}
 function save(){const saved=planStore.save(semester,selected);if(!saved)$('#save-note').textContent=PlanStore.SAVE_ERROR;return saved;}
 function loadPlan(){selected=planStore.load(semester);}
