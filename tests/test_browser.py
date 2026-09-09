@@ -269,6 +269,15 @@ class BrowserFlowTest(unittest.TestCase):
         click("#share-plan")
         self.assertTrue(run("document.querySelector('#native-share').hidden"))
         self.assertFalse(run("document.querySelector('#share-commitments').checked"))
+        self.assertEqual(
+            "Fechar janela de compartilhamento",
+            run("document.querySelector('#close-share').getAttribute('aria-label')"),
+        )
+        self.assertTrue(
+            run(
+                "(()=>{const button=document.querySelector('#close-share').getBoundingClientRect();const dialog=document.querySelector('#share-dialog').getBoundingClientRect();return button.right<=dialog.right&&button.top<dialog.top+70})()"
+            )
+        )
         self.assertIn("1 turma · 0 compromissos", text("#share-count"))
         click("#generate-share")
         course_link = run("document.querySelector('#share-link').value")

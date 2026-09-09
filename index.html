@@ -44,6 +44,7 @@
 </section>
 <section id="shared-error" hidden><h1>Não foi possível abrir a grade</h1><p id="shared-error-message" role="alert"></p><button id="shared-error-home">Voltar ao início</button></section>
 <dialog id="share-dialog" aria-labelledby="share-title">
+<button id="close-share" class="dialog-close" type="button" aria-label="Fechar janela de compartilhamento" title="Fechar">&times;</button>
 <h2 id="share-title">Compartilhar grade</h2>
 <p id="share-period"></p>
 <label><input id="share-commitments" type="checkbox"> Incluir compromissos pessoais</label>
@@ -51,7 +52,7 @@
 <p>Qualquer pessoa com o link poderá abrir esta fotografia da grade, sem login. O link não expira e não pode ser revogado. Seu nome e matrícula não serão incluídos.</p>
 <button id="generate-share">Gerar link</button>
 <div id="share-result" hidden><label>Link da grade<textarea id="share-link" readonly rows="3"></textarea></label><div class="week-actions"><button id="native-share">Compartilhar pelo dispositivo</button><button id="copy-share-link">Copiar link</button></div></div>
-<p id="share-error" role="status"></p><button id="close-share" class="secondary">Fechar</button>
+<p id="share-error" role="status"></p>
 </dialog>
 <dialog id="merge-dialog" aria-labelledby="merge-title">
 <h2 id="merge-title">Revisar cópia da grade</h2><p id="merge-period"></p>
